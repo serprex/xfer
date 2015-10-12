@@ -1,0 +1,5 @@
+cf=-std=gnu11 -Os -pipe
+rule cc
+ command = gcc $in $cf -o $out
+build xfer: cc x.c linenoise/linenoise.c
+default xfer
