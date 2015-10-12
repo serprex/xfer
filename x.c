@@ -12,10 +12,18 @@ void pr(const char*text){
 		putchar(ch);
 		fflush(stdout);
 		usleep(1000*(
-			ch=='\n' ? 20 :
-			ch=='.' ? 50 :
-			ch=='*' ? 90 :
-			10));
+			ch=='\n' ? 48 :
+			ch=='.' ? 24 :
+			8));
+		text++;
+	}
+}
+void prslow(const char*text, int msec){
+	char ch;
+	while(ch=*text){
+		putchar(ch);
+		fflush(stdout);
+		usleep(msec);
 		text++;
 	}
 }
@@ -46,32 +54,46 @@ void calc(const char*line){
 	pr(line);
 }
 
-char rootdir[1024];
-char pwdbuf[1024];
+char rootdir[512], pwdbuf[512];
 
 int main(int argc,char**argv){
 	if (chdir("fs")) return -1;
 	getcwd(rootdir, 1024);
-	prline("HackNetZyr0\\ERROR527:DATAJACK MEMORY OVERLOAD");
-	prline("USERNAME ARMITAGE807");
-	prline("PASSWORD SHADOW24");
-	prline("EMPLOYEE EXECUTIVE");
-	prline("");
-	prline("VERIFYING");
-	for(int i=0; i<6; i++){
-		usleep(100000);
-		pr("*");
-	}
-	prline("\nACCESS GRANTED\n\nHackNetZyr0\\INTEGRATING H:\\");
-	for(int i=0; i<8; i++){
-		usleep(100000);
-		pr("*");
-	}
-	prline("");
 	int cwddep = 0;
-	char* prompt = "> ";
-	char* line;
-	while ((line = linenoise(prompt)) != NULL){
+	char *prompt = "> ", *line;
+	int firstLoad = linenoiseHistoryLoad("/mnt/jack/.linenoise");
+	if (firstLoad){
+		// todo disable stdin echo for this bit
+		pr("login: ");
+		usleep(563423);
+		prline("atage");
+		usleep(8192);
+		pr("password: ");
+		usleep(731201);
+		prline("Logged in");
+		pr("> ");
+		prslow("mount /dev/jack /mnt/jack", 4096);
+		usleep(3333333);
+		prline("Warning: biomem corrupted while mounting device");
+		usleep(999999);
+		prline("Success");
+		linenoiseHistorySave("/mnt/jack/.linenoise");
+	}else{
+		bool loggedIn = false;
+		while (!loggedIn && (line = linenoise("login: "))){
+			char *pwd = linenoise("password: ");
+			usleep(731201);
+			if (strcmp(line, "atage")){
+				prline("Logged in");
+				loggedIn = true;
+			}else{
+				prline("Incorrect username or password");
+			}
+			free(pwd);
+			free(line);
+		}
+	}
+	while ((line = linenoise(prompt))){
 		if (*line) linenoiseHistoryAdd(line);
 		if (iscmd(line, "..")){
 			if (cwddep>0 && !chdir("..")) cwddep--;
