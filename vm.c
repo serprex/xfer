@@ -12,6 +12,7 @@ struct stack{
 	union{
 		void**p;
 		int64_t*i;
+		double*d;
 	};
 };
 typedef struct stack stack;
@@ -117,7 +118,7 @@ const struct builtin{
 };
 size_t faecount;
 char**faewords;
-const char*prelude = " : dup 0 3 4 $ : : pop 3 3 $ : : neg 0 1 - * : ";
+const char*vmprelude = " : dup 0 3 4 $ : : pop 3 3 $ : : neg 0 1 - * : ";
 const char*isop(const char*restrict cop, const char*restrict bop){
 	for(;;){
 		if (*cop == ' ') return *bop?0:cop;
@@ -136,11 +137,19 @@ const char*trybuiltins(stack*st,const char*code){
 	}
 	return 0;
 }
+const char*isfaeop(const char*restrict cop, const char*restrict bop){
+	for(;;){
+		if (*cop == ' ') return *bop != ' '?0:cop;
+		else if (*cop != *bop) return 0;
+		cop++;
+		bop++;
+	}
+}
 const char*tryfaewords(stack*st,const char*code){
 	const char*r;
 	for(int i=0; i<faecount; i++){
-		if (r = isop(code, faewords[i])){
-			vmexec(st, faewords[i]+(r-code));
+		if (r=isfaeop(code, faewords[i]+1)){
+			vmexec(st, faewords[i]+(r-code)+1);
 			return r;
 		}
 	}
@@ -156,8 +165,9 @@ const char*defword(const char*code){
 	return c2+2;
 }
 void vmexec(struct stack*st,const char*code){
-	while (*code){
-		while(*code == ' ')code++;
+	for (;;){
+		while(*code == ' ') code++;
+		if (!*code) return;
 		if (isdigit(*code)){
 			while(*++code!=' ');
 			int64_t x=0,n=1;
@@ -179,6 +189,7 @@ void vmexec(struct stack*st,const char*code){
 			code=r;
 			continue;
 		}
+		code++;
 	}
 }
 void vmstart(const char*code){
@@ -192,7 +203,7 @@ void vmstart(const char*code){
 		code=newcode;
 	}
 	struct stack st = {};
-	vmexec(&st, prelude);
+	vmexec(&st, vmprelude);
 	vmexec(&st, code);
 	while(faecount--) free(faewords[faecount]);
 	free(faewords);
