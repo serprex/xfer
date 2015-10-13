@@ -1,5 +1,6 @@
-cf=-std=gnu11 -Os -pipe
+cf=-g -std=gnu11 -Os -pipe
 rule cc
  command = gcc $in $cf -o $out
-build xfer: cc x.c linenoise/linenoise.c
-default xfer
+build xfer:cc xfer.c vm.c linenoise/linenoise.c
+build vmrepl:cc vmrepl.c vm.c linenoise/linenoise.c
+default xfer vmrepl
