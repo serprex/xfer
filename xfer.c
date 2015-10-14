@@ -86,7 +86,9 @@ int main(int argc,char**argv){
 	while (line = linenoise(prompt)){
 		if (!*line) continue;
 		linenoiseHistoryAdd(line);
-		if (iscmd(line, "..")){
+		if (*line == ' '){
+			vmstart(line);
+		}else if (iscmd(line, "..")){
 			if (cwddep>0 && !chdir("..")) cwddep--;
 		}else if (iscmd(line, "cd")){
 			if (strlen(line) == 2){

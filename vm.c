@@ -16,79 +16,91 @@ struct stack{
 	};
 };
 typedef struct stack stack;
-void pop(stack*st){
+static void*peek(stack*st,int n){
+	return st->p+st->s-n;
+}
+static void*pop(stack*st){
 	if(st->s) st->s--;
+	return st->p+st->s;
 }
-int64_t popi(stack*st){
-	pop(st);
-	return st->i[st->s];
-}
-void*popv(stack*st){
-	pop(st);
-	return st->p[st->s];
-}
-void pushfix(stack*st){
+static void pushfix(stack*st){
 	if (st->s>st->z){
 		st->z = st->s*2;
 		st->p = realloc(st->p, st->z*sizeof(void*));
 	}
 }
-void pushx(stack*st,size_t x){
+static void*pushx(stack*st,size_t x){
 	st->s+=x;
 	pushfix(st);
+	return st->p+st->s-1;
 }
-void push(stack*st){
-	pushx(st,1);
+static void*push(stack*st){
+	return pushx(st,1);
+}
+void pokei(stack*st,int n,int64_t x){
+	*(int64_t*)peek(st,n) = x;
+}
+void pokev(stack*st,int n,void*x){
+	*(void**)peek(st,n) = x;
+}
+int64_t peeki(stack*st,int n){
+	return *(int64_t*)peek(st,n);
+}
+void*peekv(stack*st,int n){
+	return *(void**)peek(st,n);
+}
+int64_t popi(stack*st){
+	return *(int64_t*)pop(st);
+}
+void*popv(stack*st){
+	return *(void**)pop(st);
 }
 void pushi(stack*st,int64_t i){
-	push(st);
-	st->i[st->s-1] = i;
+	*(int64_t*)push(st) = i;
 }
 void pushv(stack*st,void*p){
-	push(st);
-	st->p[st->s-1] = p;
+	*(void**)push(st) = p;
 }
 void pushptrsz(stack*st){
 	pushi(st,sizeof(void*));
 }
-void swap(stack*st){
-	void*t=st->p[st->s-1];
-	st->p[st->s-1]=st->p[st->s-2];
-	st->p[st->s-2]=t;
-}
-void duptop(stack*st){
-	pushi(st,st->i[st->s-1]);
-}
 void add(stack*st){
-	int64_t*slot=st->i+st->s-2;
+	int64_t*slot=peek(st,2);
 	*slot+=popi(st);
 }
 void sub(stack*st){
-	int64_t*slot=st->i+st->s-2;
+	int64_t*slot=peek(st,2);
 	*slot-=popi(st);
 }
 void mul(stack*st){
-	int64_t*slot=st->i+st->s-2;
+	int64_t*slot=peek(st,2);
 	*slot*=popi(st);
 }
 void divmod(stack*st){
-	int64_t a=st->i[st->s-2],b=st->i[st->s-1];
+	int64_t a=peeki(st,2),b=peeki(st,1);
 	if (b != 0){
-		st->i[st->s-2]=a/b;
-		st->i[st->s-1]=a%b;
+		pokei(st,2,a/b);
+		pokei(st,2,a%b);
 	}
+}
+void neg(stack*st){
+	pokei(st,1,-peeki(st,1));
 }
 void sform(stack*st){
 	if (st->s<2) return;
-	int64_t popx = st->i[st->s-1],
-		newbase = st->i[st->s-2];
+	const int64_t popx = peeki(st,1), newbase = peeki(st,2);
 	if (popx>st->s || newbase>st->s) return;
-	const size_t oidx = st->s-popx, bidx = st->s-newbase;
+	const size_t oidx = st->s-popx-2, bidx = st->s-newbase-2;
 	int64_t i=0;
 	do st->i[oidx+i]=st->i[oidx-st->i[oidx+i]]; while(++i<popx);
-	i=0;
-	do st->i[bidx+i]=st->i[oidx+i]; while(++i<popx);
+	memmove(st->i+bidx, st->i+oidx, popx*8);
 	st->s=bidx+popx;
+}
+void _exec(stack*st){
+	vmexec(st, st->p[st->s-1]);
+}
+void _if(stack*st){
+	vmexec(st, (st->i[st->s-1] ? st->p[st->s-2] : st->p[st->s-3]));
 }
 void printint(stack*st){
 	printf("%" PRId64,popi(st));
@@ -107,7 +119,10 @@ const struct builtin{
 	{"-",sub},
 	{"*",mul},
 	{"%/",divmod},
+	{"neg",neg},
 	{"$",sform},
+	{"if",_if},
+	{"()",_exec},
 	//{"bit&",band},
 	//{"bit|",bor},
 	//{"bit^",bxor},
@@ -118,7 +133,7 @@ const struct builtin{
 };
 size_t faecount;
 char**faewords;
-const char*vmprelude = " : dup 0 3 4 $ : : pop 3 3 $ : : neg 0 1 - * : ";
+const char*vmprelude = " : dup 1 1 1 $ : : pop 1 0 $ : ";
 const char*isop(const char*restrict cop, const char*restrict bop){
 	for(;;){
 		if (*cop == ' ') return *bop?0:cop;
@@ -197,7 +212,7 @@ void vmstart(const char*code){
 	if (prefix || postfix){
 		char*newcode = malloc(codelen+prefix+postfix+1);
 		if (prefix) newcode[0] = ' ';
-		memcpy(newcode+postfix, code, codelen);
+		memcpy(newcode+prefix, code, codelen);
 		if (postfix) newcode[codelen+postfix+prefix-1] = ' ';
 		newcode[codelen+prefix+postfix] = 0;
 		code=newcode;
