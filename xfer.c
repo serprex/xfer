@@ -51,7 +51,7 @@ int main(int argc,char**argv){
 	getcwd(rootdir, 1024);
 	int cwddep = 0;
 	char *prompt = "> ", *line;
-	int firstLoad = linenoiseHistoryLoad("/mnt/jack/.linenoise");
+	int firstLoad = linenoiseHistoryLoad("mnt/jack/.linenoise");
 	if (firstLoad){
 		// todo disable stdin echo for this bit
 		pr("login: ");
@@ -108,5 +108,5 @@ int main(int argc,char**argv){
 		}
 		free(line);
 	}
-	return linenoiseHistorySave("/mnt/jack/.linenoise");
+	return linenoiseHistorySave("mnt/jack/.linenoise");
 }
