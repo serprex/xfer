@@ -8,13 +8,21 @@ rather than some lisp or something,
 tho maybe I should've just chosen lua,
 however I've been itching to forth
 */
+struct obj{
+	int16_t r;
+	uint8_t t;
+	uint8_t d[];
+};
+typedef struct obj obj;
 struct stack{
 	size_t s,z;
 	union{
+		obj*o;
 		void**p;
 		vint*i;
 	};
 };
+typedef struct stack stack;
 struct vmscratch{
 	size_t faecount;
 	char**faewords;
@@ -22,7 +30,6 @@ struct vmscratch{
 	void**gc;
 };
 typedef struct vmscratch vmscratch;
-typedef struct stack stack;
 static void*peek(stack*st,int n){
 	return st->p+st->s-n;
 }
@@ -144,10 +151,11 @@ const struct builtin{
 	{"depth",pushdepth},
 };
 const char*vmprelude = " : dup 1 1 1 $ : "
-	": pop 1 0 $ :"
-	": swap 0 1 2 0 :"
+	": pop 1 0 $ : "
+	": swap 1 2 2 2 $ : "
+	": rsh3 1 3 2 3 3 $ : "
 	": if ? . : "
-	": iff [] 1 3 2 0 3 $ if : "
+	": iff [] rsh3 if : "
 	": neg -1 * : "
 	": prln prstr 10 prchr : ";
 const char*isop(const char*restrict cop, const char*restrict bop){
