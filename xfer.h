@@ -9,6 +9,7 @@
 #include "linenoise/linenoise.h"
 
 struct stack;
+struct vmscratch;
 extern const char*vmprelude;
-void vmexec(struct stack*st,const char*code);
+void vmexec(struct vmscratch*,struct stack*,const char*);
 void vmstart(const char*);

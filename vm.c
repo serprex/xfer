@@ -1,4 +1,5 @@
 #include "xfer.h"
+typedef intptr_t vint;
 /*
 xfer's executable format is a
 forth dialect, nothing fancy,
@@ -11,10 +12,16 @@ struct stack{
 	size_t s,z;
 	union{
 		void**p;
-		int64_t*i;
-		double*d;
+		vint*i;
 	};
 };
+struct vmscratch{
+	size_t faecount;
+	char**faewords;
+	size_t gccount;
+	void**gc;
+};
+typedef struct vmscratch vmscratch;
 typedef struct stack stack;
 static void*peek(stack*st,int n){
 	return st->p+st->s-n;
@@ -37,26 +44,26 @@ static void*pushx(stack*st,size_t x){
 static void*push(stack*st){
 	return pushx(st,1);
 }
-void pokei(stack*st,int n,int64_t x){
-	*(int64_t*)peek(st,n) = x;
+void pokei(stack*st,int n,vint x){
+	*(vint*)peek(st,n) = x;
 }
 void pokev(stack*st,int n,void*x){
 	*(void**)peek(st,n) = x;
 }
-int64_t peeki(stack*st,int n){
-	return *(int64_t*)peek(st,n);
+vint peeki(stack*st,int n){
+	return *(vint*)peek(st,n);
 }
 void*peekv(stack*st,int n){
 	return *(void**)peek(st,n);
 }
-int64_t popi(stack*st){
-	return *(int64_t*)pop(st);
+vint popi(stack*st){
+	return *(vint*)pop(st);
 }
 void*popv(stack*st){
 	return *(void**)pop(st);
 }
-void pushi(stack*st,int64_t i){
-	*(int64_t*)push(st) = i;
+void pushi(stack*st,vint i){
+	*(vint*)push(st) = i;
 }
 void pushv(stack*st,void*p){
 	*(void**)push(st) = p;
@@ -64,20 +71,30 @@ void pushv(stack*st,void*p){
 void pushptrsz(stack*st){
 	pushi(st,sizeof(void*));
 }
+void pushdepth(stack*st){
+	pushi(st,st->s);
+}
+void pushstack(stack*st){
+	vint copy=peeki(st,1);
+	stack*nst=malloc(sizeof(stack));
+	nst->p=malloc(copy*sizeof(void*));
+	memcpy(nst->p, st->p-copy, copy*sizeof(void*));
+	pushv(st, nst);
+}
 void add(stack*st){
-	int64_t*slot=peek(st,2);
+	vint*slot=peek(st,2);
 	*slot+=popi(st);
 }
 void sub(stack*st){
-	int64_t*slot=peek(st,2);
+	vint*slot=peek(st,2);
 	*slot-=popi(st);
 }
 void mul(stack*st){
-	int64_t*slot=peek(st,2);
+	vint*slot=peek(st,2);
 	*slot*=popi(st);
 }
 void divmod(stack*st){
-	int64_t a=peeki(st,2),b=peeki(st,1);
+	vint a=peeki(st,2),b=peeki(st,1);
 	if (b != 0){
 		pokei(st,2,a/b);
 		pokei(st,2,a%b);
@@ -88,19 +105,17 @@ void neg(stack*st){
 }
 void sform(stack*st){
 	if (st->s<2) return;
-	const int64_t popx = peeki(st,1), newbase = peeki(st,2);
+	const vint popx = peeki(st,1), newbase = peeki(st,2);
 	if (popx>st->s || newbase>st->s) return;
 	const size_t oidx = st->s-popx-2, bidx = st->s-newbase-2;
-	int64_t i=0;
+	vint i=0;
 	do st->i[oidx+i]=st->i[oidx-st->i[oidx+i]]; while(++i<popx);
 	memmove(st->i+bidx, st->i+oidx, popx*8);
 	st->s=bidx+popx;
 }
-void _exec(stack*st){
-	vmexec(st, st->p[st->s-1]);
-}
-void _if(stack*st){
-	vmexec(st, (st->i[st->s-1] ? st->p[st->s-2] : st->p[st->s-3]));
+void pick(stack*st){
+	if (peeki(st, 1)) pokei(st, 3, peeki(st, 2));
+	st->s-=2;
 }
 void printint(stack*st){
 	printf("%" PRId64,popi(st));
@@ -110,6 +125,9 @@ void printchr(stack*st){
 }
 void printstr(stack*st){
 	printf("%s",popv(st));
+}
+void getchr(stack*st){
+	pushi(st, getchar());
 }
 const struct builtin{
 	const char*op;
@@ -121,19 +139,20 @@ const struct builtin{
 	{"%/",divmod},
 	{"neg",neg},
 	{"$",sform},
-	{"if",_if},
-	{"()",_exec},
+	{"?",pick},
+	{"getchr",getchr},
 	//{"bit&",band},
 	//{"bit|",bor},
 	//{"bit^",bxor},
 	{"printint",printint},
 	{"printchr",printchr},
 	{"print",printstr},
-	{"ptrsz",pushptrsz}
+	{"ptrsz",pushptrsz},
+	{"depth",pushdepth},
 };
-size_t faecount;
-char**faewords;
-const char*vmprelude = " : dup 1 1 1 $ : : pop 1 0 $ : ";
+const char*vmprelude = " : dup 1 1 1 $ : "
+	": pop 1 0 $ :"
+	": if ? () : ";
 const char*isop(const char*restrict cop, const char*restrict bop){
 	for(;;){
 		if (*cop == ' ') return *bop?0:cop;
@@ -160,32 +179,82 @@ const char*isfaeop(const char*restrict cop, const char*restrict bop){
 		bop++;
 	}
 }
-const char*tryfaewords(stack*st,const char*code){
+const char*tryfaewords(vmscratch*vs,stack*st,const char*code){
 	const char*r;
-	for(int i=0; i<faecount; i++){
-		if (r=isfaeop(code, faewords[i]+1)){
-			vmexec(st, faewords[i]+(r-code)+1);
+	for(int i=0; i<vs->faecount; i++){
+		if (r=isfaeop(code, vs->faewords[i]+1)){
+			vmexec(vs, st, vs->faewords[i]+(r-code)+1);
 			return r;
 		}
 	}
 	return 0;
 }
-const char*defword(const char*code){
-	faewords = realloc(faewords, sizeof(char*)*(++faecount));
+void*mkgc(vmscratch*vs,size_t x){
+	vs->gc = realloc(vs->gc, sizeof(void*)*++vs->gccount);
+	return vs->gc[vs->gccount-1] = malloc(x);
+}
+void*freegc(vmscratch*vs,void*p){
+	for(size_t i=0; i<vs->gccount; i++){
+		if (vs->gc[i] == p){
+			vs->gc[i] = 0;
+			free(vs->gc[i]);
+			break;
+		}
+	}
+}
+const char*defword(vmscratch*vs, const char*code){
+	vs->faewords = realloc(vs->faewords, sizeof(char*)*++vs->faecount);
 	const char*c2 = code;
 	while(*c2 != ':' || c2[1] != ' ') c2++;
-	faewords[faecount-1] = malloc(c2-code+1);
-	memcpy(faewords[faecount-1], code-1, c2-code+2);
-	faewords[faecount-1][c2-code+1]=0;
+	vs->faewords[vs->faecount-1] = mkgc(vs,c2-code+1);
+	memcpy(vs->faewords[vs->faecount-1], code-1, c2-code+2);
+	vs->faewords[vs->faecount-1][c2-code+1]=0;
 	return c2+2;
 }
-void vmexec(struct stack*st,const char*code){
-	for (;;){
+void vmfree(vmscratch*vs, stack*st){
+	while(vs->gccount--) free(vs->gc[vs->gccount]);
+	free(vs->gc);
+	free(vs->faewords);
+	free(st->p);
+}
+void vmexec(vmscratch*vs,stack*st,const char*code){
+	const char*const selfcode = code;
+	for (;;)
+	{
 		while(*code == ' ') code++;
 		if (!*code) return;
+		if (*code == ':' && code[1] == ' '){
+			code = defword(vs, code+2);
+			continue;
+		}
+		if (*code == '@' && code[1] == ' '){
+			pushv(st, (char*)selfcode);
+			code+=2;
+			continue;
+		}
+		if (*code == '#' && code[1] == ' '){
+			pushv(st, (char*)(code+1));
+			code+=2;
+			continue;
+		}
+		if (*code == '.' && code[1] == ' '){
+			vmexec(vs, st, popv(st));
+			code+=2;
+			continue;
+		}
+		if (*code == '['){
+			const char*const start = code+1;
+			int pm = 1;
+			while(*++code){
+				if (*code == '[') pm++;
+				else if (*code == ']') pm--;
+				if (!pm) break;
+			}
+
+		}
 		if (isdigit(*code)){
 			while(*++code!=' ');
-			int64_t x=0,n=1;
+			vint x=0,n=1;
 			const char*c2=code;
 			while(*--c2!=' '){
 				x+=(*c2&15)*n;
@@ -194,12 +263,8 @@ void vmexec(struct stack*st,const char*code){
 			pushi(st,x);
 			continue;
 		}
-		if (*code == ':' && code[1] == ' '){
-			code = defword(code+2);
-			continue;
-		}
 		const char*r=trybuiltins(st,code);
-		if (!r) r=tryfaewords(st,code);
+		if (!r) r=tryfaewords(vs,st,code);
 		if (r){
 			code=r;
 			continue;
@@ -218,11 +283,10 @@ void vmstart(const char*code){
 		code=newcode;
 	}
 	struct stack st = {};
-	vmexec(&st, vmprelude);
-	vmexec(&st, code);
-	while(faecount--) free(faewords[faecount]);
-	free(faewords);
-	free(st.p);
+	struct vmscratch vs = {};
+	vmexec(&vs, &st, vmprelude);
+	vmexec(&vs, &st, code);
+	vmfree(&vs, &st);
 	if (prefix || postfix){
 		free((void*)code);
 	}
