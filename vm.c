@@ -100,9 +100,6 @@ void divmod(stack*st){
 		pokei(st,2,a%b);
 	}
 }
-void neg(stack*st){
-	pokei(st,1,-peeki(st,1));
-}
 void sform(stack*st){
 	if (st->s<2) return;
 	const vint popx = peeki(st,1), newbase = peeki(st,2);
@@ -124,7 +121,7 @@ void printchr(stack*st){
 	putchar(popi(st));
 }
 void printstr(stack*st){
-	printf("%s",popv(st));
+	fputs(popv(st),stdout);
 }
 void getchr(stack*st){
 	pushi(st, getchar());
@@ -137,22 +134,22 @@ const struct builtin{
 	{"-",sub},
 	{"*",mul},
 	{"%/",divmod},
-	{"neg",neg},
 	{"$",sform},
 	{"?",pick},
-	{"getchr",getchr},
-	//{"bit&",band},
-	//{"bit|",bor},
-	//{"bit^",bxor},
-	{"printint",printint},
-	{"printchr",printchr},
-	{"print",printstr},
+	{"getc",getchr},
+	{"print",printint},
+	{"prchr",printchr},
+	{"prstr",printstr},
 	{"ptrsz",pushptrsz},
 	{"depth",pushdepth},
 };
 const char*vmprelude = " : dup 1 1 1 $ : "
 	": pop 1 0 $ :"
-	": if ? () : ";
+	": swap 0 1 2 0 :"
+	": if ? . : "
+	": iff [] 1 3 2 0 3 $ if : "
+	": neg -1 * : "
+	": prln prstr 10 prchr : ";
 const char*isop(const char*restrict cop, const char*restrict bop){
 	for(;;){
 		if (*cop == ' ') return *bop?0:cop;
@@ -193,12 +190,12 @@ void*mkgc(vmscratch*vs,size_t x){
 	vs->gc = realloc(vs->gc, sizeof(void*)*++vs->gccount);
 	return vs->gc[vs->gccount-1] = malloc(x);
 }
-void*freegc(vmscratch*vs,void*p){
+void freegc(vmscratch*vs,void*p){
 	for(size_t i=0; i<vs->gccount; i++){
 		if (vs->gc[i] == p){
 			vs->gc[i] = 0;
 			free(vs->gc[i]);
-			break;
+			return;
 		}
 	}
 }
@@ -247,20 +244,25 @@ void vmexec(vmscratch*vs,stack*st,const char*code){
 			int pm = 1;
 			while(*++code){
 				if (*code == '[') pm++;
-				else if (*code == ']') pm--;
-				if (!pm) break;
+				else if (*code == ']' && !--pm) break;
 			}
-
+			char*p=mkgc(vs, code-start+1);
+			memcpy(p, start, code-start);
+			p[code-start] = 0;
+			pushv(st,p);
+			code++;
+			continue;
 		}
-		if (isdigit(*code)){
+		if ((*code == '-' && isdigit(code[1])) || isdigit(*code)){
+			int neg = *code == '-';
 			while(*++code!=' ');
 			vint x=0,n=1;
 			const char*c2=code;
-			while(*--c2!=' '){
+			while(*--c2!=(neg?'-':' ')){
 				x+=(*c2&15)*n;
 				n*=10;
 			}
-			pushi(st,x);
+			pushi(st,neg?-x:x);
 			continue;
 		}
 		const char*r=trybuiltins(st,code);
