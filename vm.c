@@ -150,14 +150,15 @@ const struct builtin{
 	{"ptrsz",pushptrsz},
 	{"depth",pushdepth},
 };
-const char*vmprelude = " : dup 1 1 1 $ : "
-	": pop 1 0 $ : "
-	": swap 1 2 2 2 $ : "
-	": rsh3 1 3 2 3 3 $ : "
-	": if ? . : "
-	": iff [] rsh3 if : "
-	": neg -1 * : "
-	": prln prstr 10 prchr : ";
+const char*vmprelude = " [ 1 1 1 $ ] [dup] : "
+	"[ 1 0 $ ] [pop] : "
+	"[ 1 2 2 2 $ ] [swap] : "
+	"[ 1 3 2 3 3 $ ] [rsh3] : "
+	"[ 2 1 1 $ ] [over] : "
+	"[ ? . ] [if] : "
+	"[ [] rsh3 if ] [iff] : "
+	"[ -1 * ] [neg] : "
+	"[ prstr 10 prchr ] [prln] : ";
 const char*isop(const char*restrict cop, const char*restrict bop){
 	for(;;){
 		if (*cop == ' ') return *bop?0:cop;
@@ -176,18 +177,10 @@ const char*trybuiltins(stack*st,const char*code){
 	}
 	return 0;
 }
-const char*isfaeop(const char*restrict cop, const char*restrict bop){
-	for(;;){
-		if (*cop == ' ') return *bop != ' '?0:cop;
-		else if (*cop != *bop) return 0;
-		cop++;
-		bop++;
-	}
-}
 const char*tryfaewords(vmscratch*vs,stack*st,const char*code){
 	const char*r;
-	for(int i=0; i<vs->faecount; i++){
-		if (r=isfaeop(code, vs->faewords[i]+1)){
+	for(int i=0; i<vs->faecount; i+=2){
+		if (r=isop(code, vs->faewords[i]+1)){
 			vmexec(vs, st, vs->faewords[i]+(r-code)+1);
 			return r;
 		}
@@ -207,20 +200,29 @@ void freegc(vmscratch*vs,void*p){
 		}
 	}
 }
-const char*defword(vmscratch*vs, const char*code){
-	vs->faewords = realloc(vs->faewords, sizeof(char*)*++vs->faecount);
-	const char*c2 = code;
-	while(*c2 != ':' || c2[1] != ' ') c2++;
-	vs->faewords[vs->faecount-1] = mkgc(vs,c2-code+1);
-	memcpy(vs->faewords[vs->faecount-1], code-1, c2-code+2);
-	vs->faewords[vs->faecount-1][c2-code+1]=0;
-	return c2+2;
+void defword(vmscratch*vs, stack*st){
+	vs->faewords = realloc(vs->faewords, sizeof(char*)*(vs->faecount+=2));
+	vs->faewords[vs->faecount-2] = peekv(st, 2);
+	vs->faewords[vs->faecount-1] = peekv(st, 1);
 }
 void vmfree(vmscratch*vs, stack*st){
 	while(vs->gccount--) free(vs->gc[vs->gccount]);
 	free(vs->gc);
 	free(vs->faewords);
 	free(st->p);
+}
+int fromhex(const char*cp){
+	int r = 0;
+	for(int i=0; i<2; i++){
+		const char c = cp[i];
+		char b;
+		if (c >= '0' && c <= '9') b='0';
+		else if (c >= 'a' && c <= 'f') b='a'-10;
+		else if (c >= 'A' && c <= 'F') b='A'-10;
+		else return -1;
+		r|=c-b<<(i?0:4);
+	}
+	return r;
 }
 void vmexec(vmscratch*vs,stack*st,const char*code){
 	const char*const selfcode = code;
@@ -229,7 +231,8 @@ void vmexec(vmscratch*vs,stack*st,const char*code){
 		while(*code == ' ') code++;
 		if (!*code) return;
 		if (*code == ':' && code[1] == ' '){
-			code = defword(vs, code+2);
+			defword(vs, st);
+			code+=2;
 			continue;
 		}
 		if (*code == '@' && code[1] == ' '){
@@ -249,14 +252,27 @@ void vmexec(vmscratch*vs,stack*st,const char*code){
 		}
 		if (*code == '['){
 			const char*const start = code+1;
-			int pm = 1;
+			int pm = 1, esc = 0;
 			while(*++code){
 				if (*code == '[') pm++;
 				else if (*code == ']' && !--pm) break;
+				else if (*code == '\\' && code[1]){
+					const int hex = fromhex(code+1);
+					esc+=1+!!~hex;
+					code+=1+!!~hex;
+				}
 			}
-			char*p=mkgc(vs, code-start+1);
-			memcpy(p, start, code-start);
-			p[code-start] = 0;
+			char*const p=mkgc(vs, code-start+1-esc);
+			esc=0;
+			for(int i=0; i<code-start; i++){
+				if (start[i] == '\\' && start[i+1]){
+					const int hex = fromhex(start+i+1);
+					p[i-esc] = ~hex ? hex : start[i+1];
+					esc+=1+!!~hex;
+					i+=1+!!~hex;
+				}else p[i-esc] = start[i];
+			}
+			p[code-start-esc] = 0;
 			pushv(st,p);
 			code++;
 			continue;
