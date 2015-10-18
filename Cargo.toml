@@ -1,3 +1,8 @@
+[package]
+name = "xfer"
+version = "0.0.0"
+authors = ["serprex"]
+
 [[bin]]
 name = "xfer"
 path = "xfer.rs"
@@ -9,3 +14,6 @@ path = "vmrepl.rs"
 [[bin]]
 name = "initfs"
 path = "initfs.rs"
+
+#[dependencies]
+#rustyline = "0.1.0"

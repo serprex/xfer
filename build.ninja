@@ -1,7 +1,5 @@
-cf=-g -std=gnu11 -Os -pipe
-rule cc
- command = gcc $in $cf -o $out
-build xfer:cc xfer.c vm.c sys.c linenoise/linenoise.c
-build vmrepl:cc vmrepl.c vm.c linenoise/linenoise.c
-build initfs:cc initfs.c sys.c
+rule rc
+ command = rustc -C prefer-dynamic -O $in
+build xfer:rc xfer.rs | vm.rs
+build vmrepl:rc vmrepl.rs | vm.rs
 default xfer

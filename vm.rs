@@ -7,13 +7,13 @@ pub enum Obj{
 	S(String),
 	I(i64),
 }
-struct Word{
-	op: String,
-	code: String,
+pub struct Word{
+	pub op: String,
+	pub code: String,
 }
-struct Vmem{
-	st : Vec<Obj>,
-	ws : Vec<Word>,
+pub struct Vmem{
+	pub st : Vec<Obj>,
+	pub ws : Vec<Word>,
 }
 
 fn add(vm : &mut Vmem){
@@ -39,7 +39,6 @@ fn divmod(vm : &mut Vmem){
 		}
 	}
 }
-
 fn pick(vm : &mut Vmem){
 	if let Some(Obj::I(top)) = vm.st.pop() {
 		if top == 0 { vm.st.pop(); }
@@ -49,7 +48,6 @@ fn pick(vm : &mut Vmem){
 		}
 	}
 }
-
 fn sform(vm : &mut Vmem){
 	let slen = vm.st.len();
 	if slen < 2 { return vm.st.clear() }
@@ -72,7 +70,6 @@ fn sform(vm : &mut Vmem){
 		vm.st.truncate(sbase+popx);
 	}
 }
-
 fn printobj(vm : &mut Vmem){
 	match vm.st.pop() {
 		Some(Obj::I(ai)) => print!("{}", ai),
@@ -80,40 +77,33 @@ fn printobj(vm : &mut Vmem){
 		_ => println!("Stack underflow")
 	}
 }
-
 fn u32char(u : u32) -> char{
 	char::from_u32(u).unwrap_or('\u{fffd}')
 }
-
 fn printchr(vm : &mut Vmem){
 	if let Some(Obj::I(ai)) = vm.st.pop() {
 		print!("{}", u32char(ai as u32))
 	}
 }
-
 fn pushdepth(vm : &mut Vmem){
 	let len = vm.st.len() as i64;
 	vm.st.push(Obj::I(len));
 }
-
 fn defword(vm : &mut Vmem){
 	if let (Some(Obj::S(_as)), Some(Obj::S(_bs))) = (vm.st.pop(), vm.st.pop()) {
 		vm.ws.push(Word { op: _as, code: _bs })
 	}
 }
-
 fn execstr(vm : &mut Vmem){
 	if let Some(Obj::S(code)) = vm.st.pop() {
 		vmexec(vm, &code[..])
 	}
 }
-
 fn getchr(vm : &mut Vmem){
 	if let Some(Ok(c)) = stdin().bytes().next() {
 		vm.st.push(Obj::I(c as i64))
 	}
 }
-
 fn execword(op : &str, vm : &mut Vmem){
 	if let Ok(val) = op.parse::<i64>(){
 		return vm.st.push(Obj::I(val))
@@ -123,7 +113,7 @@ fn execword(op : &str, vm : &mut Vmem){
 	vmexec(vm, &wc[..])
 }
 
-static VMPRELUDE : &'static str = "[ 0 $ ] [popx] : \
+pub static VMPRELUDE : &'static str = "[ 0 $ ] [popx] : \
 [ 1 popx ] [pop] : \
 [ 1 1 $ ] [dupx] : \
 [ 1 dupx ] [dup] : \
@@ -136,19 +126,11 @@ static VMPRELUDE : &'static str = "[ 0 $ ] [popx] : \
 [ -1 * ] [neg] : \
 [ print 10 prchr ] [prln] :";
 //[ [prln prstack] depth dup prln iff ] [prstack] :";
-
-pub fn vmstart(code : &str) -> (){
-	let vm = &mut Vmem { st : Vec::new(), ws : Vec::new() };
-	vmexec(vm, VMPRELUDE);
-	vmexec(vm, code)
-}
-
 fn xdigit(c : u32) -> u32 {
 	if c >= ('0' as u32) && c <= ('9' as u32) { c-('0' as u32) }
 	else if c >= ('a' as u32) && c<= ('z' as u32) { c-('a' as u32)+10 }
 	else { 16 }
 }
-
 fn parsestring(s : &str) -> (String, bool){
 	let mut ret = String::new();
 	let mut lc = '\x00';
@@ -187,8 +169,10 @@ fn parsestring(s : &str) -> (String, bool){
 	}
 	(ret, lc == ']')
 }
-
-fn vmexec(vm : &mut Vmem, code : &str) -> (){
+pub fn newvm() -> Vmem {
+	Vmem { st : Vec::new(), ws : Vec::new() }
+}
+pub fn vmexec(vm : &mut Vmem, code : &str){
 	let mut ops = code.split(' ');
 	while let Some(op) = ops.next() {
 		match op {
@@ -231,4 +215,9 @@ fn vmexec(vm : &mut Vmem, code : &str) -> (){
 				}else { execword(op, vm) }
 		}
 	}
+}
+pub fn vmstart(code : &str){
+	let mut vm = newvm();
+	vmexec(&mut vm, VMPRELUDE);
+	vmexec(&mut vm, code)
 }
