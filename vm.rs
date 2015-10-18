@@ -1,19 +1,16 @@
-use std::vec::*;
 use std::char;
+use std::collections::HashMap;
 use std::io::{Read,stdin};
+use std::vec::*;
 
 #[derive(Clone)]
 pub enum Obj{
 	S(String),
 	I(i64),
 }
-pub struct Word{
-	pub op: String,
-	pub code: String,
-}
 pub struct Vmem{
 	pub st : Vec<Obj>,
-	pub ws : Vec<Word>,
+	pub ws : HashMap<String, String>,
 }
 
 fn add(vm : &mut Vmem){
@@ -91,7 +88,7 @@ fn pushdepth(vm : &mut Vmem){
 }
 fn defword(vm : &mut Vmem){
 	if let (Some(Obj::S(_as)), Some(Obj::S(_bs))) = (vm.st.pop(), vm.st.pop()) {
-		vm.ws.push(Word { op: _as, code: _bs })
+		vm.ws.insert(_as, _bs);
 	}
 }
 fn execstr(vm : &mut Vmem){
@@ -108,8 +105,8 @@ fn execword(op : &str, vm : &mut Vmem){
 	if let Ok(val) = op.parse::<i64>(){
 		return vm.st.push(Obj::I(val))
 	}
-	let wc = if let Some(w) = vm.ws.iter().find(|&w| w.op == op)
-		{ w.code.clone() } else { return };
+	let wc = if let Some(wf) = vm.ws.get(op)
+		{ wf.clone() } else { return };
 	vmexec(vm, &wc[..])
 }
 
@@ -125,7 +122,6 @@ pub static VMPRELUDE : &'static str = "[ 0 $ ] [popx] : \
 [ [] rsh3 if ] [iff] : \
 [ -1 * ] [neg] : \
 [ print 10 prchr ] [prln] :";
-//[ [prln prstack] depth dup prln iff ] [prstack] :";
 fn xdigit(c : u32) -> u32 {
 	if c >= ('0' as u32) && c <= ('9' as u32) { c-('0' as u32) }
 	else if c >= ('a' as u32) && c<= ('z' as u32) { c-('a' as u32)+10 }
@@ -170,7 +166,7 @@ fn parsestring(s : &str) -> (String, bool){
 	(ret, lc == ']')
 }
 pub fn newvm() -> Vmem {
-	Vmem { st : Vec::new(), ws : Vec::new() }
+	Vmem { st : Vec::new(), ws : HashMap::new() }
 }
 pub fn vmexec(vm : &mut Vmem, code : &str){
 	let mut ops = code.split(' ');
