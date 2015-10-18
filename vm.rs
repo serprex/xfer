@@ -135,20 +135,19 @@ fn parsestring(s : &str) -> (String, bool){
 	let mut uni = 0;
 	for c in s.chars() {
 		if !esc && c == '\\'{
-			esc = true;
+			lc = '\x00';
+			esc = true
 		} else {
 			if esc {
 				let xd = xdigit(c as u32);
 				uni = if uni == 0 {
 					if c == 'u' { 7 } else if xd<16 { 1 } else { -2 }
 				} else { uni-1 };
-				print!("{} {}\n", xd, uni);
 				if uni >= 0 {
 					if xd<16 { hex = (hex<<4)|xd }
 					else { uni = -1 }
 				}
 				if uni <= 0 {
-					print!("{}\n",hex);
 					if uni > -2 { ret.push(u32char(hex)) }
 					if uni < 0 { ret.push(c) }
 					esc = false
@@ -187,13 +186,21 @@ fn vmexec(vm : &mut Vmem, code : &str) -> (){
 			_ =>
 				if op.starts_with("["){
 					let mut s = String::new();
+					let mut pm = 1;
 					let (chunk, end) = parsestring(op);
 					s.push_str(&chunk[1..]);
 					if !end {
 						while let Some(op) = ops.next() {
 							let (chunk, end) = parsestring(op);
+							if chunk.starts_with("[") { pm += 1 }
 							s.push_str(&chunk[..]);
-							if end { break }
+							if end {
+								if pm == 1 { break }
+								else {
+									pm -= 1;
+									s.push_str("] ")
+								}
+							}
 						}
 					}
 					vm.st.push(Obj::S(s));
