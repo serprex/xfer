@@ -1,13 +1,4 @@
 #include "xfer.h"
-typedef intptr_t vint;
-/*
-xfer's executable format is a
-forth dialect, nothing fancy,
-only enough to implement coreutils,
-rather than some lisp or something,
-tho maybe I should've just chosen lua,
-however I've been itching to forth
-*/
 struct obj{
 	int16_t r;
 	uint8_t t;

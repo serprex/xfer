@@ -1,0 +1,11 @@
+[[bin]]
+name = "xfer"
+path = "xfer.rs"
+
+[[bin]]
+name = "vmrepl"
+path = "vmrepl.rs"
+
+[[bin]]
+name = "initfs"
+path = "initfs.rs"

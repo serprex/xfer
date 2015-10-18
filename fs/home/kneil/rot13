@@ -1,0 +1,1 @@
+@ getchr dup 13 + printchr iff
