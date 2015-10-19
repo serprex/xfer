@@ -11,6 +11,7 @@ pub enum Obj{
 pub struct Vmem{
 	pub st : Vec<Obj>,
 	pub ws : HashMap<String, String>,
+	pub ffi : HashMap<&'static str, fn(&mut Vmem)>,
 }
 
 fn add(vm : &mut Vmem){
@@ -105,9 +106,12 @@ fn execword(op : &str, vm : &mut Vmem){
 	if let Ok(val) = op.parse::<i64>(){
 		return vm.st.push(Obj::I(val))
 	}
+	let fc = if let Some(func) = vm.ffi.get(op)
+		{ Some(func.clone()) } else { None };
+	if let Some(fc) = fc { fc(vm) }
 	let wc = if let Some(wf) = vm.ws.get(op)
-		{ wf.clone() } else { return };
-	vmexec(vm, &wc[..])
+		{ Some(wf.clone()) } else { None };
+	if let Some(wc) = wc { vmexec(vm, &wc[..]) }
 }
 
 pub static VMPRELUDE : &'static str = "[ 0 $ ] [popx] : \
@@ -166,54 +170,49 @@ fn parsestring(s : &str) -> (String, bool){
 	(ret, lc == ']')
 }
 pub fn newvm() -> Vmem {
-	Vmem { st : Vec::new(), ws : HashMap::new() }
+	let mut builtins : HashMap<&'static str, fn(&mut Vmem)> = HashMap::new();
+	builtins.insert("+", add);
+	builtins.insert("-", sub);
+	builtins.insert("*", mul);
+	builtins.insert("%/", divmod);
+	builtins.insert("$", sform);
+	builtins.insert("?", pick);
+	builtins.insert("getch", getchr);
+	builtins.insert("print", printobj);
+	builtins.insert("prchr", printchr);
+	builtins.insert("depth", pushdepth);
+	builtins.insert(".", execstr);
+	builtins.insert(":", defword);
+	Vmem { st : Vec::new(), ffi : builtins, ws : HashMap::new() }
 }
 pub fn vmexec(vm : &mut Vmem, code : &str){
 	let mut ops = code.split(' ');
 	while let Some(op) = ops.next() {
 		match op {
-			"+" => add(vm),
-			"-" => sub(vm),
-			"*" => mul(vm),
-			"%/" => divmod(vm),
-			"$" => sform(vm),
-			"?" => pick(vm),
 			"@" => vm.st.push(Obj::S(String::from(code))),
-			"getch" => getchr(vm),
-			"print" => printobj(vm),
-			"prchr" => printchr(vm),
-			"depth" => pushdepth(vm),
-			"." => execstr(vm),
-			":" => defword(vm),
 			"ret" => return,
-			"" => (),
-			_ =>
-				if op.starts_with("["){
-					let mut s = String::new();
-					let mut pm = 1;
-					let (chunk, end) = parsestring(op);
-					s.push_str(&chunk[1..]);
-					if !end {
-						while let Some(op) = ops.next() {
-							let (chunk, end) = parsestring(op);
-							if chunk.starts_with("[") { pm += 1 }
-							s.push_str(&chunk[..]);
-							if end {
-								if pm == 1 { break }
-								else {
-									pm -= 1;
-									s.push_str("] ")
-								}
+			_ if op.starts_with("[") => {
+				let mut s = String::new();
+				let mut pm = 1;
+				let (chunk, end) = parsestring(op);
+				s.push_str(&chunk[1..]);
+				if !end {
+					while let Some(op) = ops.next() {
+						let (chunk, end) = parsestring(op);
+						if chunk.starts_with("[") { pm += 1 }
+						s.push_str(&chunk[..]);
+						if end {
+							if pm == 1 { break }
+							else {
+								pm -= 1;
+								s.push_str("] ")
 							}
 						}
 					}
-					vm.st.push(Obj::S(s));
-				}else { execword(op, vm) }
+				}
+				vm.st.push(Obj::S(s));
+			},
+			_ => execword(op, vm)
 		}
 	}
-}
-pub fn vmstart(code : &str){
-	let mut vm = newvm();
-	vmexec(&mut vm, VMPRELUDE);
-	vmexec(&mut vm, code)
 }
