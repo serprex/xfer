@@ -1,16 +1,41 @@
-#![allow(dead_code)]//extern crate rustyline;
+use std::env;
+use std::io::{BufRead,Write,stdin,stdout};
 mod vm;
-//use rustyline::Editor;
+mod vmsys;
 
-fn main(){
-	print!("todo");
-	/*let rl = Editor::new();
-	while let Ok(line) = rl.readline("> ") {
-		rl.add_history_entry(line);
-		if (line.starts_with(" ")) {
-			vm::vmstart(line);
-		}
-		println!("{}", line);
+fn printprompt(vm : &mut vm::Vmem){
+	match vm.st[..].last()  {
+		Some(&vm::Obj::I(ref x)) => print!("{}", x),
+			Some(&vm::Obj::S(ref x)) => print!("[{}]", x),
+			None => ()
 	}
-	rl.save_history(".linenoise");*/
+	print!(" > ");
+	stdout().flush().unwrap()
+}
+
+fn main() {
+	let mut vm = vm::newvm();
+	vm::vmexec(&mut vm, vm::VMPRELUDE);
+	vmsys::sysify(&mut vm);
+	for arg in env::args() {
+		vm::vmexec(&mut vm, &arg[..])
+	}
+	printprompt(&mut vm);
+	let stdinref = stdin();
+	for lineres in stdinref.lock().lines() {
+		if let Ok(line) = lineres {
+			if line == "#stack"{
+				for i in &vm.st {
+					match *i {
+						vm::Obj::I(ref x) => print!("{} ",x),
+						vm::Obj::S(ref x) => print!("[{}] ",x),
+					}
+				}
+				println!("{}","");
+			}else{
+				vm::vmexec(&mut vm, &line[..])
+			}
+			printprompt(&mut vm);
+		}
+	}
 }

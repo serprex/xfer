@@ -12,6 +12,7 @@ pub struct Vmem{
 	pub st : Vec<Obj>,
 	pub ws : HashMap<String, String>,
 	pub ffi : HashMap<&'static str, fn(&mut Vmem)>,
+	pub uop : Option<fn(&mut Vmem, &str)>,
 }
 
 fn add(vm : &mut Vmem){
@@ -108,10 +109,19 @@ fn execword(op : &str, vm : &mut Vmem){
 	}
 	let fc = if let Some(func) = vm.ffi.get(op)
 		{ Some(func.clone()) } else { None };
-	if let Some(fc) = fc { fc(vm) }
-	let wc = if let Some(wf) = vm.ws.get(op)
-		{ Some(wf.clone()) } else { None };
-	if let Some(wc) = wc { vmexec(vm, &wc[..]) }
+	if let Some(fc) = fc {
+		fc(vm)
+	}else{
+		let wc = if let Some(wf) = vm.ws.get(op)
+			{ Some(wf.clone()) } else { None };
+		if let Some(wc) = wc {
+			vmexec(vm, &wc[..])
+		}else{
+			if let Some(uop) = vm.uop {
+				uop(vm, op)
+			}
+		}
+	}
 }
 
 pub static VMPRELUDE : &'static str = "[ 0 $ ] [popx] : \
@@ -183,7 +193,7 @@ pub fn newvm() -> Vmem {
 	builtins.insert("depth", pushdepth);
 	builtins.insert(".", execstr);
 	builtins.insert(":", defword);
-	Vmem { st : Vec::new(), ffi : builtins, ws : HashMap::new() }
+	Vmem { st: Vec::new(), ffi: builtins, ws: HashMap::new(), uop: None }
 }
 pub fn vmexec(vm : &mut Vmem, code : &str){
 	let mut ops = code.split(' ');

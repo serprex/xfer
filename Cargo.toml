@@ -15,5 +15,13 @@ path = "vmrepl.rs"
 name = "initfs"
 path = "initfs.rs"
 
+[[lib]]
+name = "vm"
+path = "vm.rs"
+
+[[lib]]
+name = "vmsys"
+path = "vmsys.rs"
+
 #[dependencies]
 #rustyline = "0.1.0"
