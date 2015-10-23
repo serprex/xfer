@@ -22,50 +22,54 @@ struct Session{
 }
 
 fn parsesession(ses : &String) -> Session {
-	let ses = ses.split('\n');
+	let mut ses = ses.split('\n');
 	let mut ret : Session = Default::default();
 	if let Some(uid) = ses.next() { ret.uid = uid.parse::<u16>().unwrap_or(0) }
 	if let Some(gid) = ses.next() { ret.gid = gid.parse::<u16>().unwrap_or(0) }
-	if let Some(dir) = ses.next() { ret.dir = String::from(dir) }
+	ret.dir = if let Some(dir) = ses.next() { String::from(dir) } else { String::from("/") };
 	if let Some(usr) = ses.next() { ret.usr = String::from(usr) }
 	if let Some(psw) = ses.next() { ret.psw = String::from(psw) }
 	ret
 }
 
-fn stringsession(ses : &Session) -> String {
+fn stringsession(ses : Session) -> String {
 	format!("{}\n{}\n{}\n{}\n{}", ses.uid, ses.gid, ses.dir, ses.usr, ses.psw)
 }
 
 fn loadses(vm : &mut Vmem) -> Session {
-	if let Some(sesbox) = vm.ws.get(&String::from("SESSION")){
-		parsesession(sesbox)
-	}else{
-		let session = Session{uid:0, gid:0, dir:String::from("/"), usr:String::from(""), psw:String::from("")};
-		vm.ws.insert(String::from("SESSION"), stringsession(&session));
-		session
+	if let Some(sesbox) = vm.ws.get(&String::from("SESSION"))
+		{ parsesession(sesbox) } else
+		{ Session{uid:0, gid:0, dir:String::from("/"), usr:String::new(), psw:String::new()} }
+}
+
+fn storeses(vm : &mut Vmem, ses : Session) -> Option<String> {
+	vm.ws.insert(String::from("SESSION"), stringsession(ses))
+}
+
+fn pathfixtrim(part : &str) -> &str{
+	if let Some(idx) = part.rfind('/')
+		{ &part[..idx+1] } else { part }
+}
+
+fn pathfix(mut path : String) -> String{
+	let mut ret = String::new();
+	if !path.ends_with("/") { path.push('/') }
+	for part in path.split("/../"){
+		ret.push_str(pathfixtrim(part));
+		if !ret.ends_with("/") { ret.push('/') }
 	}
-}
-
-fn pathfixtrim(part : &str) -> String{
-	String::from(if let Some(idx) = part.rfind('/')
-		{ &part[..idx] } else { part })
-}
-
-fn pathfix(path : &String) -> String{
-	path.split("/../").map(pathfixtrim).collect::<Vec<_>>().join("/")
+	ret
 }
 
 fn chdir(vm : &mut Vmem){
 	let arg = if let Some(Obj::S(sarg)) = vm.st.pop()
 		{ sarg.clone() } else { return };
 	let mut ses = loadses(vm);
-	if arg.starts_with("/") {
-		ses.dir = arg
-	}else{
-		ses.dir.push_str(&arg[..]);
-		if !ses.dir.ends_with("/") { ses.dir.push('/') }
-	}
-	ses.dir = pathfix(&ses.dir);
+	if arg.starts_with("/")
+		{ ses.dir = arg } else
+		{ ses.dir.push_str(&arg[..]) }
+	ses.dir = pathfix(ses.dir);
+	storeses(vm, ses);
 }
 
 fn wdir(vm : &mut Vmem){
