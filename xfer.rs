@@ -8,16 +8,13 @@ fn main() {
 	let mut vm = vm::newvm();
 	vm::vmexec(&mut vm, vm::VMPRELUDE);
 	vmsys::sysify(&mut vm);
-	for arg in env::args() {
-		vm::vmexec(&mut vm, &arg[..])
-	}
 	vm.ffi.insert("prstack", vmdebug::prstack);
-	vmdebug::printprompt(&mut vm);
+	vmdebug::prprompt(&mut vm);
 	let stdinref = stdin();
 	for lineres in stdinref.lock().lines() {
 		if let Ok(line) = lineres {
 			vm::vmexec(&mut vm, &line[..]);
-			vmdebug::printprompt(&mut vm)
+			vmdebug::prprompt(&mut vm)
 		}
 	}
 }

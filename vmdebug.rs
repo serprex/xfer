@@ -11,7 +11,7 @@ pub fn prstack(vm : &mut vm::Vmem){
 	println!("")
 }
 
-pub fn printprompt(vm : &mut vm::Vmem){
+pub fn prprompt(vm : &mut vm::Vmem){
 	match vm.st[..].last()  {
 		Some(&vm::Obj::I(ref x)) => print!("{} > ", x),
 		Some(&vm::Obj::S(ref x)) => print!("[{}] > ", x),

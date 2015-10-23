@@ -46,18 +46,17 @@ fn storeses(vm : &mut Vmem, ses : Session) -> Option<String> {
 	vm.ws.insert(String::from("SESSION"), stringsession(ses))
 }
 
-fn pathfixtrim(part : &str) -> &str{
-	if let Some(idx) = part.rfind('/')
-		{ &part[..idx+1] } else { part }
-}
-
-fn pathfix(mut path : String) -> String{
+fn pathfix(path : String) -> String{
 	let mut ret = String::new();
-	if !path.ends_with("/") { path.push('/') }
-	for part in path.split("/../"){
-		ret.push_str(pathfixtrim(part));
-		if !ret.ends_with("/") { ret.push('/') }
+	for part in path.split("/"){
+		if part == ".." {
+			if let Some(ridx) = ret.rfind('/'){ ret.truncate(ridx) }
+		} else if !part.is_empty() && part != "." {
+			ret.push('/');
+			ret.push_str(part)
+		}
 	}
+	ret.push('/');
 	ret
 }
 
