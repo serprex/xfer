@@ -3,13 +3,21 @@ use std::io::{BufRead,stdin};
 mod vm;
 mod vmdebug;
 
+fn pruop(_ : &mut vm::Vmem, op: &str){
+	println!("{}", op);
+}
+fn exit(_: &mut vm::Vmem){
+	std::process::exit(0)
+}
 fn main() {
 	let mut vm = vm::newvm();
 	vm::vmexec(&mut vm, vm::VMPRELUDE);
 	for arg in env::args() {
 		vm::vmexec(&mut vm, &arg[..])
 	}
+	vm.uop = Some(pruop);
 	vm.ffi.insert("prstack", vmdebug::prstack);
+	vm.ffi.insert("exit", exit);
 	vmdebug::prprompt(&mut vm);
 	let stdinref = stdin();
 	for lineres in stdinref.lock().lines() {

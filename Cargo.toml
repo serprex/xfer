@@ -11,17 +11,6 @@ path = "xfer.rs"
 name = "vmrepl"
 path = "vmrepl.rs"
 
-[[bin]]
-name = "initfs"
-path = "initfs.rs"
-
-[[lib]]
-name = "vm"
-path = "vm.rs"
-
-[[lib]]
-name = "vmsys"
-path = "vmsys.rs"
-
-#[dependencies]
+[dependencies]
+lazy_static = "*"
 #rustyline = "0.1.0"
