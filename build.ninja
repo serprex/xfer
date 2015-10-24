@@ -1,5 +1,0 @@
-rule rc
- command = rustc -C prefer-dynamic -O $in
-build xfer:rc xfer.rs | vm.rs vmsys.rs
-build vmrepl:rc vmrepl.rs | vm.rs
-

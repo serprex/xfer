@@ -12,17 +12,36 @@ struct Fnode{
 	parent: Option<Box<Fnode>>,
 	data: Fdata,
 }
-#[derive(Default)]
 struct Session{
 	uid: u16,
 	gid: u16,
 	dir: String,
 	usr: String,
 	psw: String,
+	root: Fnode,
 }
 
 lazy_static! {
-	static ref GSES: Mutex<Session> = Mutex::new(Session{uid:0, gid:0, dir:String::from("/"), usr:String::new(), psw:String::new()});
+	static ref GSES: Mutex<Session> = Mutex::new(Session{uid:0, gid:0, dir:String::from("/"), usr:String::new(), psw:String::new(), root: initfs()});
+}
+
+fn initfs<'a>() -> Fnode {
+	Fnode {
+		path: String::from(""),
+		parent: None,
+		data: Fdata::Children(vec![
+			Fnode{
+				path: String::from("bin"),
+				parent: None, //wrong
+				data: Fdata::Text(String::from("asdf")),
+			},
+			Fnode{
+				path: String::from("home"),
+				parent: None, //wrong
+				data: Fdata::Text(String::from("qqqr")),
+			}
+		])
+	}
 }
 
 fn pathfix(path: &String) -> String{
