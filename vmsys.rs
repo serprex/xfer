@@ -1,8 +1,11 @@
+use std;
 use std::collections::HashMap;
+use std::io::Read;
 use std::sync::Mutex;
 use vm::*;
 
 enum Fdata {
+	No,
 	Children(Vec<Fnode>),
 	Text(String),
 	Bytes(Vec<u8>),
@@ -12,9 +15,12 @@ struct Fnode{
 	parent: Option<Box<Fnode>>,
 	data: Fdata,
 }
+struct Group{
+	name: String,
+	children: Vec<Group>,
+}
 struct Session{
-	uid: u16,
-	gid: u16,
+	gid: Group,
 	dir: String,
 	usr: String,
 	psw: String,
@@ -22,26 +28,26 @@ struct Session{
 }
 
 lazy_static! {
-	static ref GSES: Mutex<Session> = Mutex::new(Session{uid:0, gid:0, dir:String::from("/"), usr:String::new(), psw:String::new(), root: initfs()});
+	static ref GSES: Mutex<Session> = Mutex::new(Session{
+		gid: Group{ name: String::from("root"), children: Vec::new() },
+		dir: String::from("/"),
+		usr: String::new(),
+		psw: String::new(),
+		root: Fnode { path: String::new(), parent: None, data: Fdata::No },
+	});
 }
 
-fn initfs<'a>() -> Fnode {
-	Fnode {
-		path: String::from(""),
-		parent: None,
-		data: Fdata::Children(vec![
-			Fnode{
-				path: String::from("bin"),
-				parent: None, //wrong
-				data: Fdata::Text(String::from("asdf")),
-			},
-			Fnode{
-				path: String::from("home"),
-				parent: None, //wrong
-				data: Fdata::Text(String::from("qqqr")),
-			}
-		])
-	}
+pub fn initfs() {
+	let mut fsrc = String::new();
+	if let Ok(ref mut f) = std::fs::File::open("fs")
+		{ f.read_to_string(&mut fsrc); }
+	else if let Ok(ref mut f) = std::fs::File::open("fsinit")
+		{ f.read_to_string(&mut fsrc); }
+	else { std::process::exit(0) }
+	let mut vm = newvm();
+	vmexec(&mut vm, VMPRELUDE);
+	sysify(&mut vm);
+	vmexec(&mut vm, &fsrc[..])
 }
 
 fn pathfix(path: &String) -> String{

@@ -201,6 +201,7 @@ pub fn vmexec(vm : &mut Vmem, code : &str){
 		match op {
 			"@" => vm.st.push(Obj::S(String::from(code))),
 			"ret" => return,
+			_ if op.starts_with("'") => vm.st.push(Obj::S(String::from(&op[1..]))),
 			_ if op.starts_with("[") => {
 				let mut s = String::new();
 				let mut pm = 1;
@@ -220,7 +221,7 @@ pub fn vmexec(vm : &mut Vmem, code : &str){
 						}
 					}
 				}
-				vm.st.push(Obj::S(s));
+				vm.st.push(Obj::S(s))
 			},
 			_ => execword(op, vm)
 		}

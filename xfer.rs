@@ -7,6 +7,7 @@ mod vmsys;
 mod vmdebug;
 
 fn main() {
+	vmsys::initfs();
 	let mut vm = vm::newvm();
 	vm::vmexec(&mut vm, vm::VMPRELUDE);
 	vmsys::sysify(&mut vm);
