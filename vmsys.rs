@@ -4,37 +4,42 @@ use std::io::Read;
 use std::sync::Mutex;
 use vm::*;
 
-enum Fdata {
+enum Fnode{
 	No,
-	Children(Vec<Fnode>),
+	Children(HashMap<String,Fnode>),
 	Text(String),
 	Bytes(Vec<u8>),
-}
-struct Fnode{
-	path: String,
-	parent: Option<Box<Fnode>>,
-	data: Fdata,
 }
 struct Group{
 	name: String,
 	children: Vec<Group>,
 }
-struct Session{
-	gid: Group,
-	dir: String,
-	usr: String,
+struct User{
 	psw: String,
-	root: Fnode,
+	gid: String,
+}
+struct Session{
+	dir: String,
+	user: String,
+	froot: Fnode,
+	groot: Group,
+	users: HashMap<String, User>,
 }
 
 lazy_static! {
 	static ref GSES: Mutex<Session> = Mutex::new(Session{
-		gid: Group{ name: String::from("root"), children: Vec::new() },
 		dir: String::from("/"),
-		usr: String::new(),
-		psw: String::new(),
-		root: Fnode { path: String::new(), parent: None, data: Fdata::No },
+		user: String::from("root"),
+		froot: Fnode::Children(HashMap::new()),
+		groot: Group { name: String::from("root"), children: Vec::new() },
+		users: HashMap::new(),
 	});
+}
+
+fn initusers() -> HashMap<String, User> {
+	let mut hm = HashMap::new();
+	hm.insert(String::from("root"), User { psw: String::from("\0"), gid: String::from("root") });
+	hm
 }
 
 pub fn initfs() {
@@ -78,6 +83,37 @@ fn wdir(vm: &mut Vmem){
 	vm.st.push(Obj::S(GSES.lock().unwrap().dir.clone()))
 }
 
+fn mkdircore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>){
+	if let Some(name) = it.next() {
+		let nchack = match cursor.get_mut(name){
+			Some(&mut Fnode::Children(ref mut nc)) => return mkdircore(nc, it),
+			Some => return,
+			None => {
+				let mut nc = HashMap::new();
+				mkdircore(&mut nc, it);
+				nc
+			}
+		};
+		cursor.insert(String::from(name), Fnode::Children(nchack));
+	}
+}
+
+fn mkdir(vm: &mut Vmem){
+	if let (Some(Obj::S(dnameraw)),Some(Obj::S(gname))) = (vm.st.pop(), vm.st.pop()) {
+		if let Fnode::Children(ref mut cursor) = GSES.lock().unwrap().froot {
+			mkdircore(cursor, pathfix(&dnameraw).split('/'))
+		}
+	}
+}
+
+fn ldir(vm : &mut Vmem){
+	if let Some(Obj::S(dnameraw)) = vm.st.pop() {
+		if let Fnode::Children(ref cursor) = GSES.lock().unwrap().froot {
+			for key in cursor.keys() { println!("{}", key) }
+		}
+	}
+}
+
 /*fn handleuop(vm: &mut Vmem, op: &str){
 }*/
 
@@ -85,6 +121,8 @@ pub fn sysify(vm: &mut Vmem){
 	//vm.uop = Some(handleuop); // For $PATH
 	vm.ffi.insert("cd", chdir);
 	vm.ffi.insert("wd", wdir);
+	vm.ffi.insert("md", mkdir);
+	vm.ffi.insert("ls", ldir);
 	//vm.ffi.insert("fread", fread);
 	//vm.ffi.insert("fwrite", fwrite);
 	//vm.ffi.insert("fexec", fexec);
