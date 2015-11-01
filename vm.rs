@@ -1,6 +1,7 @@
 use std::char;
 use std::collections::HashMap;
 use std::io::{Read,stdin};
+use std::iter::Iterator;
 use std::vec::*;
 
 #[derive(Clone)]
@@ -123,33 +124,30 @@ fn execword(op : &str, vm : &mut Vmem){
 		}
 	}
 }
-
-pub static VMPRELUDE : &'static str = "[ 0 $ ] [popx] : \
-[ 1 popx ] [pop] : \
-[ 1 1 $ ] [dupx] : \
-[ 1 dupx ] [dup] : \
-[ 2 dupx ] [over] : \
-[ 1 2 4 2 $ ] [swap] : \
-[ 1 3 2 6 3 $ ] [rsh3] : \
-[ 2 1 3 6 3 $ ] [lsh3] : \
-[ ? . ] [if] : \
-[ [] rsh3 if ] [iff] : \
-[ -1 * ] [neg] : \
-[ print 10 prchr ] [prln] :";
+pub static VMPRELUDE : &'static str = "[0 $]'popx : \
+[1 popx]'pop : \
+[1 1 $]'dupx : \
+[1 dupx]'dup : \
+[2 dupx]'over : \
+[1 2 4 2 $]'swap : \
+[1 3 2 6 3 $]'rsh3 : \
+[2 1 3 6 3 $]'lsh3 : \
+[? .]'if : \
+[[] rsh3 if]'iff : \
+[-1 *]'neg : \
+[print 10 prchr]'prln :";
 fn xdigit(c : u32) -> u32 {
 	if c >= ('0' as u32) && c <= ('9' as u32) { c-('0' as u32) }
 	else if c >= ('a' as u32) && c<= ('z' as u32) { c-('a' as u32)+10 }
 	else { 16 }
 }
-fn parsestring(s : &str) -> (String, bool){
+fn parsestring(s : &str) -> String{
 	let mut ret = String::new();
-	let mut lc = '\x00';
 	let mut esc = false;
 	let mut hex = 0;
 	let mut uni = 0;
 	for c in s.chars() {
 		if !esc && c == '\\'{
-			lc = '\x00';
 			esc = true
 		} else {
 			if esc {
@@ -166,18 +164,10 @@ fn parsestring(s : &str) -> (String, bool){
 					if uni < 0 { ret.push(c) }
 					esc = false
 				}
-			} else {
-				lc = c;
-				ret.push(c)
-			}
+			} else { ret.push(c) }
 		}
 	}
-	if lc != ']' { ret.push(' ') }
-	else if !ret.is_empty() {
-		let rl1 = ret.len()-1;
-		ret.truncate(rl1);
-	}
-	(ret, lc == ']')
+	ret
 }
 pub fn newvm() -> Vmem {
 	let mut builtins : HashMap<&'static str, fn(&mut Vmem)> = HashMap::new();
@@ -195,34 +185,49 @@ pub fn newvm() -> Vmem {
 	builtins.insert(":", defword);
 	Vmem { st: Vec::new(), ffi: builtins, ws: HashMap::new(), uop: None }
 }
+fn bracketmatch<T: Iterator<Item=(usize,char)>>(mut chars: T) -> usize {
+	let mut idx: usize = 0;
+	let mut pm: u32 = 0;
+	while let Some((oi, ch)) = chars.next() {
+		idx = oi+1;
+		if ch == '\\' { chars.next(); }
+		else {
+			if ch == '[' { pm += 1 }
+			else if ch == ']' {
+				if pm == 0 { break }
+				pm -= 1;
+			}
+		}
+	}
+	idx
+}
+fn tokenize(code: &str, opi: usize) -> (usize,usize){
+	let mut chars = code[opi..].chars().enumerate().skip_while(|&(_,ch)| ch.is_whitespace());
+	let fch = chars.next();
+	match fch {
+		None => (0, 0),
+		Some((oi,'[')) => (opi+oi, opi+bracketmatch(chars)),
+		Some((oi,_)) =>
+			(opi+oi, opi+match chars.take_while(|&(_,ch)| !ch.is_whitespace()).last() {
+				None => oi+1,
+				Some((i,_)) => i+1,
+			})
+	}
+}
 pub fn vmexec(vm : &mut Vmem, code : &str){
-	let mut ops = code.split(' ');
-	while let Some(op) = ops.next() {
+	let mut opinext = 0;
+	loop {
+		let (opi, opend) = tokenize(code, opinext);
+		if opend == 0 { return }
+		opinext = opend;
+		let op = &code[opi..opend];
 		match op {
-			"@" => vm.st.push(Obj::S(String::from(code))),
+			"<@>" => vm.st.push(Obj::S(String::from(code))),
+			"@>" => vm.st.push(Obj::S(String::from(&code[opi..]))),
+			"<@" => vm.st.push(Obj::S(String::from(&code[..opi]))),
 			"ret" => return,
 			_ if op.starts_with("'") => vm.st.push(Obj::S(String::from(&op[1..]))),
-			_ if op.starts_with("[") => {
-				let mut s = String::new();
-				let mut pm = 1;
-				let (chunk, end) = parsestring(op);
-				s.push_str(&chunk[1..]);
-				if !end {
-					while let Some(op) = ops.next() {
-						let (chunk, end) = parsestring(op);
-						if chunk.starts_with("[") { pm += 1 }
-						s.push_str(&chunk[..]);
-						if end {
-							if pm == 1 { break }
-							else {
-								pm -= 1;
-								s.push_str("] ")
-							}
-						}
-					}
-				}
-				vm.st.push(Obj::S(s))
-			},
+			_ if op.starts_with("[") => vm.st.push(Obj::S(parsestring(&op[1..op.len()-1]))),
 			_ => execword(op, vm)
 		}
 	}
