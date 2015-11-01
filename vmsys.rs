@@ -4,20 +4,24 @@ use std::io::Read;
 use std::sync::Mutex;
 use vm::*;
 
+#[derive(Debug)]
 enum Fnode{
 	No,
 	Children(HashMap<String,Fnode>),
 	Text(String),
 	Bytes(Vec<u8>),
 }
+#[derive(Debug)]
 struct Group{
 	name: String,
 	children: Vec<Group>,
 }
+#[derive(Debug)]
 struct User{
 	psw: String,
 	gid: String,
 }
+#[derive(Debug)]
 struct Session{
 	dir: String,
 	user: String,
@@ -84,34 +88,47 @@ fn wdir(vm: &mut Vmem){
 }
 
 fn mkdircore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>){
-	if let Some(name) = it.next() {
-		let nchack = match cursor.get_mut(name){
-			Some(&mut Fnode::Children(ref mut nc)) => return mkdircore(nc, it),
-			Some => return,
-			None => {
-				let mut nc = HashMap::new();
-				mkdircore(&mut nc, it);
-				nc
-			}
-		};
-		cursor.insert(String::from(name), Fnode::Children(nchack));
+	if let Some(mut name) = it.next() {
+		if name.is_empty() {
+			mkdircore(cursor, it)
+		}else{
+			let nchack = match cursor.get_mut(name){
+				Some(&mut Fnode::Children(ref mut nc)) => return mkdircore(nc, it),
+				Some(_) => return println!("{}", name),
+				None => {
+					let mut nc = HashMap::new();
+					mkdircore(&mut nc, it);
+					nc
+				}
+			};
+			cursor.insert(String::from(name), Fnode::Children(nchack));
+		}
 	}
 }
 
 fn mkdir(vm: &mut Vmem){
-	if let (Some(Obj::S(dnameraw)),Some(Obj::S(gname))) = (vm.st.pop(), vm.st.pop()) {
+	if let Some(Obj::S(dnameraw)) = vm.st.pop() {
 		if let Fnode::Children(ref mut cursor) = GSES.lock().unwrap().froot {
+			println!("{}", dnameraw);
 			mkdircore(cursor, pathfix(&dnameraw).split('/'))
 		}
 	}
-}
-
-fn ldir(vm : &mut Vmem){
-	if let Some(Obj::S(dnameraw)) = vm.st.pop() {
-		if let Fnode::Children(ref cursor) = GSES.lock().unwrap().froot {
-			for key in cursor.keys() { println!("{}", key) }
+}/*
+fn ldircore(cursor : &HashMap<String, Fnode>){
+	for key in cursor.keys() {
+		println!("{}", key);
+		if let Some(Fnode::Children(ref c)) = cursor.get(key) {
+			ldircore(&c)
 		}
 	}
+}*/
+fn ldir(vm : &mut Vmem){
+	//if let Some(Obj::S(dnameraw)) = vm.st.pop() {
+		/*if let Fnode::Children(ref cursor) = GSES.lock().unwrap().froot {
+			ldircore(cursor)
+		}*/
+		println!("{:?}", GSES.lock().unwrap().froot)
+	//}
 }
 
 /*fn handleuop(vm: &mut Vmem, op: &str){
