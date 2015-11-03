@@ -117,7 +117,29 @@ fn ldir(vm : &mut Vmem){
 		println!("{:?}", GSES.lock().unwrap().froot)
 	//}
 }
-
+fn freadcore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>, fname: &str, vm: &mut Vmem){
+	if let Some(name) = it.next() {
+		if name.is_empty() {
+			freadcore(cursor, it, fname, vm)
+		}else{
+			let ncentry = cursor.entry(String::from(name)).or_insert_with(|| Fnode::Children(HashMap::new()));
+			if let Fnode::Children(ref mut nc) = *ncentry
+				{ freadcore(nc, it, fname, vm) } else { println!("{}", name) }
+		}
+	}else if let Some(&Fnode::Text(ref content)) = cursor.get(fname) {
+		vm.st.push(Obj::S(content.clone()));
+	}
+}
+fn fread(vm : &mut Vmem){
+	if let Some(Obj::S(dnameraw)) = vm.st.pop() {
+		let dname = pathfix(&String::from(&dnameraw[..]));
+		if let Some(ridx) = dname[..dname.len()-1].rfind('/') {
+			if let Fnode::Children(ref mut cursor) = GSES.lock().unwrap().froot {
+				freadcore(cursor, String::from(&dname[..ridx]).split('/'), &dname[ridx+1..dname.len()-1], vm)
+			}
+		}
+	}
+}
 fn fwritecore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>, fname: &str, content: String){
 	if let Some(name) = it.next() {
 		if name.is_empty() {
@@ -128,7 +150,6 @@ fn fwritecore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>
 				{ fwritecore(nc, it, fname, content) } else { println!("{}", name) }
 		}
 	}else{
-		println!("{}", fname);
 		cursor.insert(String::from(fname), Fnode::Text(content));
 	}
 }
@@ -138,7 +159,7 @@ fn fwrite(vm : &mut Vmem){
 		if let Some(ridx) = dname[..dname.len()-1].rfind('/') {
 			if let Fnode::Children(ref mut cursor) = GSES.lock().unwrap().froot {
 				mkdircore(cursor, String::from(&dname[..ridx]).split('/'));
-				fwritecore(cursor, String::from(&dname[..ridx]).split('/'), &dname[ridx+1..], content)
+				fwritecore(cursor, String::from(&dname[..ridx]).split('/'), &dname[ridx+1..dname.len()-1], content)
 			}
 		}
 	}
@@ -153,7 +174,7 @@ pub fn sysify(vm: &mut Vmem){
 	vm.ffi.insert("wd", wdir);
 	vm.ffi.insert("md", mkdir);
 	vm.ffi.insert("ls", ldir);
-	//vm.ffi.insert("fread", fread);
+	vm.ffi.insert("fread", fread);
 	vm.ffi.insert("fwrite", fwrite);
 	//vm.ffi.insert("fexec", fexec);
 }
