@@ -133,7 +133,7 @@ pub static VMPRELUDE : &'static str = "[0 $]'popx : \
 [1 3 2 6 3 $]'rsh3 : \
 [2 1 3 6 3 $]'lsh3 : \
 [? .]'if : \
-[[] rsh3 if]'iff : \
+[' rsh3 if]'iff : \
 [-1 *]'neg : \
 [print 10 prchr]'prln :";
 fn xdigit(c : u32) -> u32 {

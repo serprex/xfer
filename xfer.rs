@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate lazy_static;
-use std::env;
 use std::io::{BufRead,stdin};
 mod vm;
 mod vmsys;

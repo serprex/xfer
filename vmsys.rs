@@ -40,12 +40,6 @@ lazy_static! {
 	});
 }
 
-fn initusers() -> HashMap<String, User> {
-	let mut hm = HashMap::new();
-	hm.insert(String::from("root"), User { psw: String::from("\0"), gid: String::from("root") });
-	hm
-}
-
 pub fn initfs() {
 	let mut fsrc = String::new();
 	if let Ok(ref mut f) = std::fs::File::open("fs")
@@ -88,20 +82,13 @@ fn wdir(vm: &mut Vmem){
 }
 
 fn mkdircore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>){
-	if let Some(mut name) = it.next() {
+	if let Some(name) = it.next() {
 		if name.is_empty() {
 			mkdircore(cursor, it)
 		}else{
-			let nchack = match cursor.get_mut(name){
-				Some(&mut Fnode::Children(ref mut nc)) => return mkdircore(nc, it),
-				Some(_) => return println!("{}", name),
-				None => {
-					let mut nc = HashMap::new();
-					mkdircore(&mut nc, it);
-					nc
-				}
-			};
-			cursor.insert(String::from(name), Fnode::Children(nchack));
+			let ncentry = cursor.entry(String::from(name)).or_insert_with(|| Fnode::Children(HashMap::new()));
+			if let Fnode::Children(ref mut nc) = *ncentry
+				{ mkdircore(nc, it) } else { println!("{}", name) }
 		}
 	}
 }
@@ -131,6 +118,32 @@ fn ldir(vm : &mut Vmem){
 	//}
 }
 
+fn fwritecore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>, fname: &str, content: String){
+	if let Some(name) = it.next() {
+		if name.is_empty() {
+			fwritecore(cursor, it, fname, content)
+		}else{
+			let ncentry = cursor.entry(String::from(name)).or_insert_with(|| Fnode::Children(HashMap::new()));
+			if let Fnode::Children(ref mut nc) = *ncentry
+				{ fwritecore(nc, it, fname, content) } else { println!("{}", name) }
+		}
+	}else{
+		println!("{}", fname);
+		cursor.insert(String::from(fname), Fnode::Text(content));
+	}
+}
+fn fwrite(vm : &mut Vmem){
+	if let (Some(Obj::S(dnameraw)), Some(Obj::S(content))) = (vm.st.pop(),vm.st.pop()) {
+		let dname = pathfix(&String::from(&dnameraw[..]));
+		if let Some(ridx) = dname[..dname.len()-1].rfind('/') {
+			if let Fnode::Children(ref mut cursor) = GSES.lock().unwrap().froot {
+				mkdircore(cursor, String::from(&dname[..ridx]).split('/'));
+				fwritecore(cursor, String::from(&dname[..ridx]).split('/'), &dname[ridx+1..], content)
+			}
+		}
+	}
+}
+
 /*fn handleuop(vm: &mut Vmem, op: &str){
 }*/
 
@@ -141,6 +154,6 @@ pub fn sysify(vm: &mut Vmem){
 	vm.ffi.insert("md", mkdir);
 	vm.ffi.insert("ls", ldir);
 	//vm.ffi.insert("fread", fread);
-	//vm.ffi.insert("fwrite", fwrite);
+	vm.ffi.insert("fwrite", fwrite);
 	//vm.ffi.insert("fexec", fexec);
 }
