@@ -12,7 +12,7 @@ pub enum Obj{
 }
 pub struct Vmem{
 	pub st : Vec<Obj>,
-	pub vars : HashMap<String, Obj>,
+	pub vars : Vec<HashMap<String, Obj>>,
 	pub ws : HashMap<String, String>,
 	pub ffi : HashMap<&'static str, fn(&mut Vmem)>,
 	pub uop : Option<fn(&mut Vmem, &str)>,
@@ -126,13 +126,17 @@ fn gt(vm : &mut Vmem){
 }
 fn setvar(vm : &mut Vmem){
 	if let (Some(Obj::S(s)),Some(o)) = (vm.st.pop(),vm.st.pop()) {
-		vm.vars.insert(s, o);
+		if let Some(mut var) = vm.vars.last_mut() {
+			var.insert(s, o);
+		}
 	}
 }
 fn getvar(vm : &mut Vmem){
 	if let Some(Obj::S(s)) = vm.st.pop() {
-		if let Some(o) = vm.vars.get(&s) {
-			vm.st.push(o.clone());
+		for vars in vm.vars.iter().rev() {
+			if let Some(o) = vars.get(&s) {
+				return vm.st.push(o.clone())
+			}
 		}
 	}
 }
@@ -242,11 +246,11 @@ pub fn newvm() -> Vmem {
 	b.insert("nth", nth);
 	b.insert("len", len);
 	b.insert(">", gt);
-	b.insert("=", setvar);
-	b.insert("\\", getvar);
+	b.insert("set", setvar);
+	b.insert("get", getvar);
 	b.insert(".", execstr);
 	b.insert(":", defword);
-	Vmem { st: Vec::new(), ffi: b, vars: HashMap::new(), ws: HashMap::new(), uop: None }
+	Vmem { st: Vec::new(), ffi: b, vars: Vec::new(), ws: HashMap::new(), uop: None }
 }
 fn bracketmatch<T: Iterator<Item=(usize,char)>>(mut chars: T) -> usize {
 	let mut idx: usize = 0;
@@ -279,19 +283,29 @@ fn tokenize(code: &str, opi: usize) -> (usize,usize){
 }
 pub fn vmexec(vm : &mut Vmem, code : &str){
 	let mut opinext = 0;
+	vm.vars.push(HashMap::new());
 	loop {
 		let (opi, opend) = tokenize(code, opinext);
-		if opend == 0 { return }
+		if opend == 0 { break }
 		opinext = opend;
 		let op = &code[opi..opend];
 		match op {
 			"<@>" => vm.st.push(Obj::S(String::from(code))),
 			"@>" => vm.st.push(Obj::S(String::from(&code[opi..]))),
 			"<@" => vm.st.push(Obj::S(String::from(&code[..opi]))),
-			"ret" => return,
+			"ret" => break,
 			_ if op.starts_with("'") => vm.st.push(Obj::S(String::from(&op[1..]))),
+			_ if op.starts_with("\"") => {
+				vm.st.push(Obj::S(String::from(&op[1..])));
+				getvar(vm)
+			},
+			_ if op.starts_with("=") => {
+				vm.st.push(Obj::S(String::from(&op[1..])));
+				setvar(vm)
+			},
 			_ if op.starts_with("[") => vm.st.push(Obj::S(parsestring(&op[1..op.len()-1]))),
 			_ => execword(op, vm)
 		}
 	}
+	vm.vars.pop();
 }
