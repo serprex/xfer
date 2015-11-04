@@ -13,10 +13,10 @@ fn main() {
 	vm.ffi.insert("prstack", vmdebug::prstack);
 	vmdebug::prprompt(&mut vm);
 	let stdinref = stdin();
-	for lineres in stdinref.lock().lines() {
-		if let Ok(line) = lineres {
-			vm::vmexec(&mut vm, &line[..]);
-			vmdebug::prprompt(&mut vm)
-		}
+	let mut line = String::new();
+	while let Ok(_) = stdinref.read_line(&mut line) {
+		vm::vmexec(&mut vm, &line[..]);
+		vmdebug::prprompt(&mut vm);
+		line.clear()
 	}
 }

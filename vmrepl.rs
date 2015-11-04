@@ -4,7 +4,7 @@ mod vm;
 mod vmdebug;
 
 fn pruop(_ : &mut vm::Vmem, op: &str){
-	println!("{}", op);
+	println!("op? {}", op);
 }
 fn exit(_: &mut vm::Vmem){
 	std::process::exit(0)
@@ -20,10 +20,10 @@ fn main() {
 	vm.ffi.insert("exit", exit);
 	vmdebug::prprompt(&mut vm);
 	let stdinref = stdin();
-	for lineres in stdinref.lock().lines() {
-		if let Ok(line) = lineres {
-			vm::vmexec(&mut vm, &line[..]);
-			vmdebug::prprompt(&mut vm)
-		}
+	let mut line = String::new();
+	while let Ok(_) = stdinref.read_line(&mut line) {
+		vm::vmexec(&mut vm, &line[..]);
+		vmdebug::prprompt(&mut vm);
+		line.clear()
 	}
 }

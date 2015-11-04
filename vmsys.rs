@@ -165,16 +165,19 @@ fn fwrite(vm : &mut Vmem){
 	}
 }
 
-/*fn handleuop(vm: &mut Vmem, op: &str){
-}*/
+fn handleuop(vm: &mut Vmem, op: &str){
+	let mut bpath = String::from("bin/");
+	bpath.push_str(op);
+	vm.st.push(Obj::S(bpath));
+	vmexec(vm, "fread .")
+}
 
 pub fn sysify(vm: &mut Vmem){
-	//vm.uop = Some(handleuop); // For $PATH
+	vm.uop = Some(handleuop);
 	vm.ffi.insert("cd", chdir);
 	vm.ffi.insert("wd", wdir);
 	vm.ffi.insert("md", mkdir);
 	vm.ffi.insert("ls", ldir);
 	vm.ffi.insert("fread", fread);
 	vm.ffi.insert("fwrite", fwrite);
-	//vm.ffi.insert("fexec", fexec);
 }

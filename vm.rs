@@ -8,9 +8,11 @@ use std::vec::*;
 pub enum Obj{
 	S(String),
 	I(i64),
+	A(Vec<Obj>),
 }
 pub struct Vmem{
 	pub st : Vec<Obj>,
+	pub vars : HashMap<String, Obj>,
 	pub ws : HashMap<String, String>,
 	pub ffi : HashMap<&'static str, fn(&mut Vmem)>,
 	pub uop : Option<fn(&mut Vmem, &str)>,
@@ -39,12 +41,27 @@ fn divmod(vm : &mut Vmem){
 		}
 	}
 }
+fn band(vm : &mut Vmem){
+	if let (Some(Obj::I(a)),Some(Obj::I(b))) = (vm.st.pop(), vm.st.pop()){
+		vm.st.push(Obj::I(a & b))
+	}
+}
+fn bor(vm : &mut Vmem){
+	if let (Some(Obj::I(a)),Some(Obj::I(b))) = (vm.st.pop(), vm.st.pop()){
+		vm.st.push(Obj::I(a | b))
+	}
+}
+fn bxor(vm : &mut Vmem){
+	if let (Some(Obj::I(a)),Some(Obj::I(b))) = (vm.st.pop(), vm.st.pop()){
+		vm.st.push(Obj::I(a ^ b))
+	}
+}
 fn pick(vm : &mut Vmem){
 	if let Some(Obj::I(top)) = vm.st.pop() {
 		if top == 0 { vm.st.pop(); }
 		else {
 			let len = vm.st.len();
-			if len > 0 { vm.st.swap_remove(len-1); }
+			if len > 1 { vm.st.swap_remove(len-2); }
 		}
 	}
 }
@@ -74,7 +91,8 @@ fn printobj(vm : &mut Vmem){
 	match vm.st.pop() {
 		Some(Obj::I(ai)) => print!("{}", ai),
 		Some(Obj::S(_as)) => print!("{}", _as),
-		_ => println!("Stack underflow")
+		Some(Obj::A(_)) => print!("[A]"),
+		None => println!("Stack underflow")
 	}
 }
 fn u32char(u : u32) -> char{
@@ -89,6 +107,35 @@ fn pushdepth(vm : &mut Vmem){
 	let len = vm.st.len() as i64;
 	vm.st.push(Obj::I(len));
 }
+fn nth(vm : &mut Vmem){
+	if let (Some(Obj::I(a)),Some(Obj::S(b))) = (vm.st.pop(), vm.st.pop()){
+		if let Some(ch) = b.chars().nth(a as usize) {
+			vm.st.push(Obj::I(ch as i64))
+		}
+	}
+}
+fn len(vm : &mut Vmem){
+	if let Some(Obj::S(a)) = vm.st.pop(){
+		vm.st.push(Obj::I(a.len() as i64))
+	}
+}
+fn gt(vm : &mut Vmem){
+	if let (Some(Obj::I(a)),Some(Obj::I(b))) = (vm.st.pop(), vm.st.pop()){
+		vm.st.push(Obj::I(if a > b {1} else {0}))
+	}
+}
+fn setvar(vm : &mut Vmem){
+	if let (Some(Obj::S(s)),Some(o)) = (vm.st.pop(),vm.st.pop()) {
+		vm.vars.insert(s, o);
+	}
+}
+fn getvar(vm : &mut Vmem){
+	if let Some(Obj::S(s)) = vm.st.pop() {
+		if let Some(o) = vm.vars.get(&s) {
+			vm.st.push(o.clone());
+		}
+	}
+}
 fn defword(vm : &mut Vmem){
 	if let (Some(Obj::S(_as)), Some(Obj::S(_bs))) = (vm.st.pop(), vm.st.pop()) {
 		vm.ws.insert(_as, _bs);
@@ -99,10 +146,9 @@ fn execstr(vm : &mut Vmem){
 		vmexec(vm, &code[..])
 	}
 }
-fn getchr(vm : &mut Vmem){
-	if let Some(Ok(c)) = stdin().bytes().next() {
-		vm.st.push(Obj::I(c as i64))
-	}
+fn getline(vm : &mut Vmem){
+	let mut s = String::new();
+	if let Ok(_) = stdin().read_line(&mut s) { vm.st.push(Obj::S(s)) }
 }
 fn execword(op : &str, vm : &mut Vmem){
 	if let Ok(val) = op.parse::<i64>(){
@@ -126,15 +172,24 @@ fn execword(op : &str, vm : &mut Vmem){
 }
 pub static VMPRELUDE : &'static str = "[0 $]'popx : \
 [1 popx]'pop : \
-[1 1 $]'dupx : \
-[1 dupx]'dup : \
-[2 dupx]'over : \
+[1 1 $]'dupnth : \
+[1 dupnth]'dup : \
+[2 dupnth]'over : \
+[2 1 2 2 $]'dup2 : \
+[3 2 1 3 3 $]'dup3 : \
 [1 2 4 2 $]'swap : \
 [1 3 2 6 3 $]'rsh3 : \
 [2 1 3 6 3 $]'lsh3 : \
 [? .]'if : \
 [' rsh3 if]'iff : \
 [-1 *]'neg : \
+[1 0 lsh3 ?]'not : \
+[0 1 lsh3 ?]'boo : \
+[dup2 > rsh3 - | boo]'>= : \
+[> not]'<= : \
+[>= not]'< : \
+[dup2 - not]'== : \
+[dup2 - boo]'!= : \
 [print 10 prchr]'prln :";
 fn xdigit(c : u32) -> u32 {
 	if c >= ('0' as u32) && c <= ('9' as u32) { c-('0' as u32) }
@@ -170,20 +225,28 @@ fn parsestring(s : &str) -> String{
 	ret
 }
 pub fn newvm() -> Vmem {
-	let mut builtins : HashMap<&'static str, fn(&mut Vmem)> = HashMap::new();
-	builtins.insert("+", add);
-	builtins.insert("-", sub);
-	builtins.insert("*", mul);
-	builtins.insert("%/", divmod);
-	builtins.insert("$", sform);
-	builtins.insert("?", pick);
-	builtins.insert("getch", getchr);
-	builtins.insert("print", printobj);
-	builtins.insert("prchr", printchr);
-	builtins.insert("depth", pushdepth);
-	builtins.insert(".", execstr);
-	builtins.insert(":", defword);
-	Vmem { st: Vec::new(), ffi: builtins, ws: HashMap::new(), uop: None }
+	let mut b : HashMap<&'static str, fn(&mut Vmem)> = HashMap::new();
+	b.insert("+", add);
+	b.insert("-", sub);
+	b.insert("*", mul);
+	b.insert("&", band);
+	b.insert("|", bor);
+	b.insert("^", bxor);
+	b.insert("%/", divmod);
+	b.insert("$", sform);
+	b.insert("?", pick);
+	b.insert("getline", getline);
+	b.insert("print", printobj);
+	b.insert("prchr", printchr);
+	b.insert("depth", pushdepth);
+	b.insert("nth", nth);
+	b.insert("len", len);
+	b.insert(">", gt);
+	b.insert("=", setvar);
+	b.insert("\\", getvar);
+	b.insert(".", execstr);
+	b.insert(":", defword);
+	Vmem { st: Vec::new(), ffi: b, vars: HashMap::new(), ws: HashMap::new(), uop: None }
 }
 fn bracketmatch<T: Iterator<Item=(usize,char)>>(mut chars: T) -> usize {
 	let mut idx: usize = 0;
