@@ -189,11 +189,11 @@ pub static VMPRELUDE : &'static str = "[0 $]'popx : \
 [-1 *]'neg : \
 [1 0 lsh3 ?]'not : \
 [0 1 lsh3 ?]'boo : \
-[dup2 > rsh3 - | boo]'>= : \
-[> not]'<= : \
-[>= not]'< : \
-[dup2 - not]'== : \
-[dup2 - boo]'!= : \
+[dup2 gt rsh3 - | boo]'gte : \
+[gt not]'lte : \
+[gte not]'lt : \
+[dup2 - not]'eq : \
+[dup2 - boo]'ne : \
 [print 10 prchr]'prln :";
 fn xdigit(c : u32) -> u32 {
 	if c >= ('0' as u32) && c <= ('9' as u32) { c-('0' as u32) }
@@ -245,7 +245,7 @@ pub fn newvm() -> Vmem {
 	b.insert("depth", pushdepth);
 	b.insert("nth", nth);
 	b.insert("len", len);
-	b.insert(">", gt);
+	b.insert("gt", gt);
 	b.insert("set", setvar);
 	b.insert("get", getvar);
 	b.insert(".", execstr);
