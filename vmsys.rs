@@ -164,6 +164,29 @@ fn fwrite(vm : &mut Vmem){
 		}
 	}
 }
+fn rmcore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>, fname: &str){
+	if let Some(name) = it.next() {
+		if name.is_empty() {
+			rmcore(cursor, it, fname)
+		}else{
+			let ncentry = cursor.entry(String::from(name)).or_insert_with(|| Fnode::Children(HashMap::new()));
+			if let Fnode::Children(ref mut nc) = *ncentry
+				{ rmcore(nc, it, fname) }
+		}
+	}else{
+		cursor.remove(&String::from(fname));
+	}
+}
+fn rm(vm : &mut Vmem){
+	if let Some(Obj::S(dnameraw)) = vm.st.pop() {
+		let dname = pathfix(&String::from(&dnameraw[..]));
+		if let Some(ridx) = dname[..dname.len()-1].rfind('/') {
+			if let Fnode::Children(ref mut cursor) = GSES.lock().unwrap().froot {
+				rmcore(cursor, String::from(&dname[..ridx]).split('/'), &dname[ridx+1..dname.len()-1])
+			}
+		}
+	}
+}
 
 fn handleuop(vm: &mut Vmem, op: &str){
 	let mut bpath = String::from("bin/");
@@ -180,4 +203,5 @@ pub fn sysify(vm: &mut Vmem){
 	vm.ffi.insert("ls", ldir);
 	vm.ffi.insert("fread", fread);
 	vm.ffi.insert("fwrite", fwrite);
+	vm.ffi.insert("rm", rm);
 }

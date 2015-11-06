@@ -17,6 +17,7 @@ pub fn prprompt(vm : &mut vm::Vmem){
 		Some(&vm::Obj::I(ref x)) => print!("{} > ", x),
 		Some(&vm::Obj::S(ref x)) => print!("[{}] > ", x),
 		Some(&vm::Obj::A(_)) => print!("A > "),
+		Some(&vm::Obj::E) => print!("E > "),
 		None => print!("> ")
 	}
 	stdout().flush().unwrap_or(())
