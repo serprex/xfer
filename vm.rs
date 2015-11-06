@@ -27,7 +27,7 @@ fn add(vm : &mut Vmem){
 }
 fn sub(vm : &mut Vmem){
 	if let (Some(ao),Some(bo)) = (vm.st.pop(), vm.st.pop()){
-		match (ao,bo) {
+		match (bo,ao) {
 			(Obj::I(a),Obj::I(b)) => vm.st.push(Obj::I(a - b)),
 			(Obj::S(a),Obj::S(b)) => vm.st.push(Obj::I(match a.cmp(&b){
 				Ordering::Less => -1,
@@ -123,12 +123,12 @@ fn mka(vm : &mut Vmem){
 }
 fn nth(vm : &mut Vmem){
 	if let Some(Obj::I(n)) = vm.st.pop(){
-		let r = match vm.st.last() {
-			Some(&Obj::S(ref s)) => Obj::I(s.chars().nth(n as usize).unwrap_or('\0') as i64),
-			Some(&Obj::A(ref a)) => a.get(n as usize).unwrap_or(&Obj::I(0)).clone(),
-			_ => return
+		let r : Option<Obj> = match vm.st.last() {
+			Some(&Obj::S(ref s)) => s.chars().nth(n as usize).map(|x| Obj::I(x as i64)),
+			Some(&Obj::A(ref a)) => a.get(n as usize).map(|x| x.clone()),
+			_ => None
 		};
-		vm.st.push(r)
+		vm.st.push(r.unwrap_or(Obj::E))
 	}
 }
 fn siphon(vm : &mut Vmem) {
@@ -241,18 +241,21 @@ fn execword(op : &str, vm : &mut Vmem){
 		}
 	}
 }
-pub static VMPRELUDE : &'static str = r#"[0 $]@popx \
-[1 popx]@pop \
+pub static VMPRELUDE : &'static str = r#"[0 $]@dropx \
+[1 dropx]@drop \
 [1 1 $]@dupnth \
 [1 dupnth]@dup \
 [2 dupnth]@over \
 [2 1 2 2 $]@dup2 \
 [3 2 1 3 3 $]@dup3 \
 [1 2 4 2 $]@swap \
+[1 3 1 $]@nip \
+[1 2 1 5 3 $]@tuck \
 [1 3 2 6 3 $]@rsh3 \
 [2 1 3 6 3 $]@lsh3 \
 [? .]@if \
 [' rsh3 if]@iff \
+[swap -]@minus \
 [-1 *]@neg \
 [1 0 lsh3 ?]@not \
 [0 1 lsh3 ?]@boo \
@@ -315,8 +318,8 @@ pub fn newvm() -> Vmem {
 	b.insert("depth", pushdepth);
 	b.insert("mka", mka);
 	b.insert("siphon", siphon);
-	b.insert("apush", pusha);
-	b.insert("apop", popa);
+	b.insert("push", pusha);
+	b.insert("pop", popa);
 	b.insert("nth", nth);
 	b.insert("nthset", nthset);
 	b.insert("len", len);

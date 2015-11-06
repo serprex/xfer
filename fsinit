@@ -1,7 +1,8 @@
 'home/kneil md
 'root md
 [fread prln] 'bin/cat fwrite
-[strlen =len 0 =i [dup "i dup lsh3 swap nth 13 + prchr "i 1 + dup =i "len eq]while] 'bin/rot13 fwrite
+[ls 'prln map] 'bin/ls fwrite
+[len =len 0 =i [dup "i dup lsh3 swap nth 13 + prchr "i 1 + dup =i "len eq]while] 'bin/rot13 fwrite
 [access /home/kneil, password kl3pto
 escalate privileges to kill root's vscan process
 how? that's your job
