@@ -1,23 +1,33 @@
 use vm;
 use std::io::{stdout,Write};
 
-pub fn prstack(vm : &mut vm::Vmem){
-	for i in &vm.st {
-		match *i {
-			vm::Obj::I(ref x) => print!("{} ",x),
-			vm::Obj::S(ref x) => print!("[{}] ",x),
-			_ => print!("? "),
+pub fn objrepr(o: &vm::Obj) -> String {
+	match o {
+		&vm::Obj::E => String::from("E"),
+		&vm::Obj::I(ref x) => format!("{}", x),
+		&vm::Obj::S(ref x) => format!("[{}]", x),
+		&vm::Obj::A(ref x) => {
+			let mut s = String::new();
+			for a in x {
+				s.push_str(&objrepr(a));
+				s.push(' ')
+			}
+			s.pop();
+			format!("({})", s)
 		}
+	}
+}
+
+pub fn prstack(vm: &mut vm::Vmem){
+	for o in &vm.st {
+		print!("{} ", objrepr(o));
 	}
 	println!("")
 }
 
-pub fn prprompt(vm : &mut vm::Vmem){
+pub fn prprompt(vm: &mut vm::Vmem){
 	match vm.st[..].last()  {
-		Some(&vm::Obj::I(ref x)) => print!("{} > ", x),
-		Some(&vm::Obj::S(ref x)) => print!("[{}] > ", x),
-		Some(&vm::Obj::A(_)) => print!("A > "),
-		Some(&vm::Obj::E) => print!("E > "),
+		Some(o) => print!("{} > ", objrepr(o)),
 		None => print!("> ")
 	}
 	stdout().flush().unwrap_or(())

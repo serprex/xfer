@@ -96,26 +96,30 @@ fn mkdircore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>)
 fn mkdir(vm: &mut Vmem){
 	if let Some(Obj::S(dnameraw)) = vm.st.pop() {
 		if let Fnode::Children(ref mut cursor) = GSES.lock().unwrap().froot {
-			println!("{}", dnameraw);
 			mkdircore(cursor, pathfix(&dnameraw).split('/'))
 		}
 	}
-}/*
-fn ldircore(cursor: &HashMap<String, Fnode>){
-	for key in cursor.keys() {
-		println!("{}", key);
-		if let Some(Fnode::Children(ref c)) = cursor.get(key) {
-			ldircore(&c)
+}
+fn ldircore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>, vm: &mut Vmem){
+	if let Some(name) = it.next() {
+		if name.is_empty() {
+			ldircore(cursor, it, vm)
+		}else{
+			let ncentry = cursor.entry(String::from(name)).or_insert_with(|| Fnode::Children(HashMap::new()));
+			if let Fnode::Children(ref mut nc) = *ncentry
+				{ ldircore(nc, it, vm) } else { vm.st.push(Obj::E) }
+		}
+	} else { vm.st.push(Obj::A(cursor.keys().map(|x| Obj::S(x.clone())).collect())) }
+}
+fn ldir(vm: &mut Vmem){
+	if let Some(Obj::S(dnameraw)) = vm.st.pop() {
+		let dname = pathfix(&dnameraw);
+		if let Some(ridx) = dname[..dname.len()-1].rfind('/') {
+			if let Fnode::Children(ref mut cursor) = GSES.lock().unwrap().froot {
+				ldircore(cursor, String::from(&dname[..ridx]).split('/'), vm)
+			}
 		}
 	}
-}*/
-fn ldir(vm: &mut Vmem){
-	//if let Some(Obj::S(dnameraw)) = vm.st.pop() {
-		/*if let Fnode::Children(ref cursor) = GSES.lock().unwrap().froot {
-			ldircore(cursor)
-		}*/
-		println!("{:?}", GSES.lock().unwrap().froot)
-	//}
 }
 fn freadcore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>, fname: &str, vm: &mut Vmem){
 	if let Some(name) = it.next() {
@@ -124,10 +128,10 @@ fn freadcore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>,
 		}else{
 			let ncentry = cursor.entry(String::from(name)).or_insert_with(|| Fnode::Children(HashMap::new()));
 			if let Fnode::Children(ref mut nc) = *ncentry
-				{ freadcore(nc, it, fname, vm) } else { println!("{}", name) }
+				{ freadcore(nc, it, fname, vm) } else { vm.st.push(Obj::E) }
 		}
 	}else if let Some(&Fnode::Text(ref content)) = cursor.get(fname) {
-		vm.st.push(Obj::S(content.clone()));
+		vm.st.push(Obj::S(content.clone()))
 	}
 }
 fn fread(vm: &mut Vmem){
@@ -149,9 +153,7 @@ fn fwritecore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>
 			if let Fnode::Children(ref mut nc) = *ncentry
 				{ fwritecore(nc, it, fname, content) } else { println!("{}", name) }
 		}
-	}else{
-		cursor.insert(String::from(fname), Fnode::Text(content));
-	}
+	}else{ cursor.insert(String::from(fname), Fnode::Text(content)); }
 }
 fn fwrite(vm: &mut Vmem){
 	if let (Some(Obj::S(dnameraw)), Some(Obj::S(content))) = (vm.st.pop(),vm.st.pop()) {
@@ -173,9 +175,7 @@ fn rmcore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>, fn
 			if let Fnode::Children(ref mut nc) = *ncentry
 				{ rmcore(nc, it, fname) }
 		}
-	}else{
-		cursor.remove(&String::from(fname));
-	}
+	} else { cursor.remove(&String::from(fname)); }
 }
 fn rm(vm: &mut Vmem){
 	if let Some(Obj::S(dnameraw)) = vm.st.pop() {

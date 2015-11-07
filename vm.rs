@@ -161,9 +161,12 @@ fn pusha(vm: &mut Vmem){
 	}
 }
 fn popa(vm: &mut Vmem){
-	let ap = if let Some(&mut Obj::A(ref mut a)) = vm.st.last_mut()
-		{ a.pop() } else { return };
-	if let Some(apo) = ap { vm.st.push(apo) }
+	let ap = match vm.st.last_mut() {
+		Some(&mut Obj::S(ref mut s)) => s.pop().map(|c| Obj::I(c as i64)),
+		Some(&mut Obj::A(ref mut a)) => a.pop(),
+		_ => None
+	};
+	vm.st.push(ap.unwrap_or(Obj::E))
 }
 fn nthset(vm: &mut Vmem){
 	if let Some(Obj::I(idx)) = vm.st.pop() {
