@@ -1,7 +1,7 @@
 'home/kneil md
 'root md
-[fread prln] 'bin/cat fwrite
-[ls 'prln map] 'bin/ls fwrite
+[fread prln]'bin/cat fwrite
+[ls 'prln map]'bin/ls fwrite
 [len =len 0 =i [dup "i dup lsh3 swap nth 13 + prchr "i 1 + dup =i "len eq]while] 'bin/rot13 fwrite
 [access /home/kneil, password kl3pto
 escalate privileges to kill root's vscan process
@@ -9,8 +9,50 @@ how? that's your job
 i'll handle the rest once you're out
 
 regards,
-	atage] 'mnt/jack/readme fwrite
-[login: ] print
+	atage]'mnt/jack/readme fwrite
+[Could someone head downstairs & educate those hardhats on what they're making?
+st should be liberated from its misnomer upbringing. Rather than viewing it as a data stack it should be viewed as a code buffer. ie code _is_ data (NOT strings!)
+The syscall interface should be passing slices of the code buffer, not the whole kitchen sink. Right now if one wants to securely withhold data from children callbacks,
+they must '=a cb [0 =a .]'
+~psst
+
+Your Lisp programs tend to use variables to store data since they lack the utility of the stack. You'd still have to shadow those variables, as the root issue is dynamic scoping. Really, why aren't we leaving name resolution to a compilation phase?
+~iowart
+
+Has anyone compared the performances of the shells? These implementations could really use an internal representation so that we might simplify the underlying architecture
+~aawal
+
+The Lisp crew _has_ implemented an internal representation. Wipe the mud from your brow & recognize that programs are trees, will always be trees, & should never not be trees
+Stop trying to flatten our world perspective. My code should be able to introspect itself & others without having to deserialize your mashed potato representation
+~psst
+
+Internal representation? The architecture cleanly separates code from data. I say data loosely; this is clearly an object oriented architecture. What'd be nice is if the internal machine state was itself represented within the object data model. Speaking from an abstract machine standpoint, syscalls should exist to query machine state & replace it. Runtimes should be responsible for handling multiple machine states as contexts to deal with hiding information from inner contexts. These complaints aren't about our intermediate representations; we each have our own control on that front. It's about each wanting to mandate the abstract machine state's format to carry their desired runtime state. Were the runtime state as flexible as a single slot of our forth stack, this debate could be thrown under the rug & instead we could let our internal political squabbles manifest in uncooperative runtimes rather than a design by committee architecture (where then the grown ups who will cooperate still pay the price of all y'all)
+~iowart
+
+The machine architecture's state should include an intermediate representation. Hasn't anybody looked into the cost of all these specialized chips? There's a lot of duplicated effort being exercised to implement cheap lisps when right down the circuit board is an effort to implement a real lisp
+~psst
+
+In reality your cheap attempt at a real lisp is being optimized by the chip manufacturing to use the forth chip as an ALU. You should stop by downstairs for some coffee now & then, get an education in what we're really making
+~aawal
+
+You're only able to say that because the commonalities are implemented on your chip turf due to political history
+~psst
+]'home/shared/plslisp fwrite
+[Someone put a leash on those Lispers, their programs are getting exceedingly obnoxious. You're not evolving the field of AI by writing a dictionary attack. ******* script kiddies
+~aawal
+
+This is a system generated response. Please moderate your language. Your message has been rectified.
+~lord
+
+******
+***    ***   *** ****** ***   ***
+****** ***   *** ***    ******
+***    ********* ****** ***   *** these bots. Can't even learn to recognize ascii art. The apple doesn't fall far from the tree
+~aawal
+
+This is a system generated response. Please moderate your language. Your message has been rectified.
+~lord]'home/shared/apocalypse
+[login: ]print
 'atage prln
-[password: ] println
+[password: ]println
 ' 'atage login

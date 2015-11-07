@@ -1,6 +1,7 @@
 use std::env;
 use std::io::{BufRead,stdin};
 mod vm;
+mod vf;
 mod vmdebug;
 
 fn pruop(_ : &mut vm::Vmem, op: &str){
@@ -10,10 +11,11 @@ fn exit(_: &mut vm::Vmem){
 	std::process::exit(0)
 }
 fn main() {
-	let mut vm = vm::newvm();
-	vm::vmexec(&mut vm, vm::VMPRELUDE);
+	let mut vm: vm::Vmem = Default::default();
+	vf::forthify(&mut vm.ffi);
+	vf::vmexec(&mut vm, vf::VMPRELUDE);
 	for arg in env::args() {
-		vm::vmexec(&mut vm, &arg[..])
+		vf::vmexec(&mut vm, &arg[..])
 	}
 	vm.uop = Some(pruop);
 	vm.ffi.insert("prstack", vmdebug::prstack);
@@ -22,7 +24,7 @@ fn main() {
 	let stdinref = stdin();
 	let mut line = String::new();
 	while let Ok(_) = stdinref.read_line(&mut line) {
-		vm::vmexec(&mut vm, &line[..]);
+		vf::vmexec(&mut vm, &line[..]);
 		vmdebug::prprompt(&mut vm);
 		line.clear()
 	}
