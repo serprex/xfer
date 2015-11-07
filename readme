@@ -1,0 +1,10 @@
+| |||||||
+| || | | | Has nothing to do with X
+ | ||||||
+| || | | | Original @ http://64digits.com/games/?cmd=view_game&id=2939
+| || ||| | Original was bad; let's try make this good
+
+xfer is an interactive fiction where the user is stuck on a commandline, left to sift through poorly thought up mash of cyberpunk
+this is a reality where forth is the system language; even the shell. tempted to bolt lisp scripting on top
+eventually things should be fleshed out enough that actual story writing can begin,
+until then it's mucking around with the forth & trying to come up with a clean way to implement filesystem permissions & users
