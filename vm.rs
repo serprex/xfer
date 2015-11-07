@@ -183,11 +183,6 @@ fn len(vm: &mut Vmem){
 		}));
 	}
 }
-fn gt(vm: &mut Vmem){
-	if let (Some(Obj::I(a)),Some(Obj::I(b))) = (vm.st.pop(), vm.st.pop()){
-		vm.st.push(Obj::I(if a > b {1} else {0}))
-	}
-}
 fn setvar(vm: &mut Vmem){
 	if let (Some(Obj::S(s)),Some(o)) = (vm.st.pop(),vm.st.pop()) {
 		if let Some(mut var) = vm.vars.last_mut() {
@@ -203,6 +198,7 @@ fn getvar(vm: &mut Vmem){
 			}
 		}
 	}
+	vm.st.push(Obj::E)
 }
 fn gettype(vm: &mut Vmem){
 	let t = Obj::I(match vm.st.pop() {
@@ -339,7 +335,6 @@ pub fn newvm() -> Vmem {
 	b.insert("nth", nth);
 	b.insert("nthset", nthset);
 	b.insert("len", len);
-	b.insert("gt", gt);
 	b.insert("set", setvar);
 	b.insert("get", getvar);
 	b.insert("t?", gettype);

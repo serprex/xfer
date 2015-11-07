@@ -73,7 +73,7 @@ fn chdir(vm: &mut Vmem){
 	let ref mut ses = *GSES.lock().unwrap();
 	if arg.starts_with("/")
 		{ ses.dir = arg } else
-		{ ses.dir.push_str(&arg[..]) }
+		{ ses.dir.push_str(&arg) }
 	ses.dir = pathfix(&ses.dir);
 }
 
@@ -101,7 +101,7 @@ fn mkdir(vm: &mut Vmem){
 		}
 	}
 }/*
-fn ldircore(cursor : &HashMap<String, Fnode>){
+fn ldircore(cursor: &HashMap<String, Fnode>){
 	for key in cursor.keys() {
 		println!("{}", key);
 		if let Some(Fnode::Children(ref c)) = cursor.get(key) {
@@ -109,7 +109,7 @@ fn ldircore(cursor : &HashMap<String, Fnode>){
 		}
 	}
 }*/
-fn ldir(vm : &mut Vmem){
+fn ldir(vm: &mut Vmem){
 	//if let Some(Obj::S(dnameraw)) = vm.st.pop() {
 		/*if let Fnode::Children(ref cursor) = GSES.lock().unwrap().froot {
 			ldircore(cursor)
@@ -130,9 +130,9 @@ fn freadcore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>,
 		vm.st.push(Obj::S(content.clone()));
 	}
 }
-fn fread(vm : &mut Vmem){
+fn fread(vm: &mut Vmem){
 	if let Some(Obj::S(dnameraw)) = vm.st.pop() {
-		let dname = pathfix(&String::from(&dnameraw[..]));
+		let dname = pathfix(&dnameraw);
 		if let Some(ridx) = dname[..dname.len()-1].rfind('/') {
 			if let Fnode::Children(ref mut cursor) = GSES.lock().unwrap().froot {
 				freadcore(cursor, String::from(&dname[..ridx]).split('/'), &dname[ridx+1..dname.len()-1], vm)
@@ -153,9 +153,9 @@ fn fwritecore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>
 		cursor.insert(String::from(fname), Fnode::Text(content));
 	}
 }
-fn fwrite(vm : &mut Vmem){
+fn fwrite(vm: &mut Vmem){
 	if let (Some(Obj::S(dnameraw)), Some(Obj::S(content))) = (vm.st.pop(),vm.st.pop()) {
-		let dname = pathfix(&String::from(&dnameraw[..]));
+		let dname = pathfix(&dnameraw);
 		if let Some(ridx) = dname[..dname.len()-1].rfind('/') {
 			if let Fnode::Children(ref mut cursor) = GSES.lock().unwrap().froot {
 				mkdircore(cursor, String::from(&dname[..ridx]).split('/'));
@@ -177,9 +177,9 @@ fn rmcore(cursor: &mut HashMap<String, Fnode>, mut it: std::str::Split<char>, fn
 		cursor.remove(&String::from(fname));
 	}
 }
-fn rm(vm : &mut Vmem){
+fn rm(vm: &mut Vmem){
 	if let Some(Obj::S(dnameraw)) = vm.st.pop() {
-		let dname = pathfix(&String::from(&dnameraw[..]));
+		let dname = pathfix(&dnameraw);
 		if let Some(ridx) = dname[..dname.len()-1].rfind('/') {
 			if let Fnode::Children(ref mut cursor) = GSES.lock().unwrap().froot {
 				rmcore(cursor, String::from(&dname[..ridx]).split('/'), &dname[ridx+1..dname.len()-1])
