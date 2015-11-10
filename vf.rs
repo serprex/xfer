@@ -19,20 +19,8 @@ fn cmp(vm: &mut Vmem){
 		{ vm.st.push(ordobji(ao.cmp(&bo))) } else { vm.st.push(Obj::E) }
 }
 fn add(vm: &mut Vmem){
-	if let (Some(bo),Some(ao)) = (vm.st.pop(), vm.st.pop()){
-		match (ao,bo) {
-			(Obj::I(a),Obj::I(b)) => vm.st.push(Obj::I(a + b)),
-			(Obj::S(mut a),Obj::S(b)) => {
-				a.push_str(&b);
-				vm.st.push(Obj::S(a))
-			},
-			(Obj::A(mut a),Obj::A(b)) => {
-				a.extend(b.iter().map(|x| x.clone()));
-				vm.st.push(Obj::A(a))
-			},
-			_ => vm.st.push(Obj::E)
-		}
-	} else { vm.st.push(Obj::E) }
+	if let (Some(bo),Some(ao)) = (vm.st.pop(), vm.st.pop())
+		{ vm.st.push(iaddobj(ao, bo)) } else { vm.st.push(Obj::E) }
 }
 fn sub(vm: &mut Vmem){
 	if let (Some(Obj::I(b)),Some(Obj::I(a))) = (vm.st.pop(), vm.st.pop())
@@ -98,13 +86,9 @@ fn sform(vm: &mut Vmem){
 	}
 }
 fn printobj(vm: &mut Vmem){
-	match vm.st.pop() {
-		Some(Obj::I(ai)) => print!("{}", ai),
-		Some(Obj::S(_as)) => print!("{}", _as),
-		Some(Obj::A(_)) => print!("A"),
-		Some(Obj::E) => print!("E"),
-		None => println!("Stack underflow")
-	}
+	if let Some(o) = vm.st.pop()
+		{ print!("{}", objstr(&o)) }
+		else { println!("Stack underflow") }
 }
 fn u32char(u: u32) -> char{
 	char::from_u32(u).unwrap_or('\u{fffd}')

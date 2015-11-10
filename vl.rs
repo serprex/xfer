@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::io::{Read,stdin};
 use std::iter::Iterator;
+use std::mem;
 use std::vec::*;
 use vm::*;
 
@@ -18,21 +19,31 @@ fn cmp(vm: &mut Vmem){
 	if let (Some(bo),Some(ao)) = (vm.st.pop(), vm.st.pop())
 		{ vm.st.push(ordobji(ao.cmp(&bo))) } else { vm.st.push(Obj::E) }
 }
+fn car(vm: &mut Vmem){
+	vm.st.truncate(1)
+}
+fn cdr(vm: &mut Vmem){
+	if vm.st.len() > 0 {
+		vm.st.remove(0);
+	}
+}
 fn add(vm: &mut Vmem){
-	if let (Some(bo),Some(ao)) = (vm.st.pop(), vm.st.pop()){
-		match (ao,bo) {
-			(Obj::I(a),Obj::I(b)) => vm.st.push(Obj::I(a + b)),
-			(Obj::S(mut a),Obj::S(b)) => {
-				a.push_str(&b);
-				vm.st.push(Obj::S(a))
-			},
-			(Obj::A(mut a),Obj::A(b)) => {
-				a.extend(b.iter().map(|x| x.clone()));
-				vm.st.push(Obj::A(a))
-			},
-			_ => vm.st.push(Obj::E)
+	let ln = vm.st.len();
+	if ln > 0 {
+		let mut a = vm.st.swap_remove(0);
+		let mut i = 1;
+		while i < ln-i {
+			let o = vm.st.swap_remove(i);
+			a = iaddobj(a, o);
+			i += 1
 		}
-	} else { vm.st.push(Obj::E) }
+		while ln-i > 0 {
+			let o = vm.st.pop().unwrap();
+			a = iaddobj(a, o);
+			i += 1
+		}
+		vm.st.push(a)
+	}
 }
 fn sub(vm: &mut Vmem){
 	if let (Some(Obj::I(b)),Some(Obj::I(a))) = (vm.st.pop(), vm.st.pop())
@@ -76,12 +87,8 @@ fn pick(vm: &mut Vmem){
 	}
 }
 fn printobj(vm: &mut Vmem){
-	match vm.st.pop() {
-		Some(Obj::I(ai)) => print!("{}", ai),
-		Some(Obj::S(_as)) => print!("{}", _as),
-		Some(Obj::A(_)) => print!("A"),
-		Some(Obj::E) => print!("E"),
-		None => println!("Stack underflow")
+	while let Some(o) = vm.st.pop() {
+		print!("{}", objstr(&o));
 	}
 }
 fn u32char(u: u32) -> char{
@@ -108,29 +115,6 @@ fn nth(vm: &mut Vmem){
 		};
 		vm.st.push(r.unwrap_or(Obj::E))
 	}
-}
-fn siphon(vm: &mut Vmem) {
-	let n = if let Some(Obj::I(n)) = vm.st.pop() { n } else { 0 };
-	for _ in 0..n {
-		let len = vm.st.len();
-		vm.st.swap(len-2, len-1);
-		pusha(vm)
-	}
-}
-fn pusha(vm: &mut Vmem){
-	if let Some(o) = vm.st.pop() {
-		if let Some(&mut Obj::A(ref mut a)) = vm.st.last_mut() {
-			a.push(o)
-		}
-	}
-}
-fn popa(vm: &mut Vmem){
-	let ap = match vm.st.last_mut() {
-		Some(&mut Obj::S(ref mut s)) => s.pop().map(|c| Obj::I(c as i64)),
-		Some(&mut Obj::A(ref mut a)) => a.pop(),
-		_ => None
-	};
-	vm.st.push(ap.unwrap_or(Obj::E))
 }
 fn nthset(vm: &mut Vmem){
 	if let Some(Obj::I(idx)) = vm.st.pop() {
@@ -189,34 +173,9 @@ fn sayword(vm: &mut Vmem){
 		vm.st.push(s)
 	}
 }
-fn execstr(vm: &mut Vmem){
-	if let Some(Obj::S(code)) = vm.st.pop() {
-		vmexec(vm, &code)
-	}
-}
 fn getline(vm: &mut Vmem){
 	let mut s = String::new();
 	if let Ok(_) = stdin().read_line(&mut s) { vm.st.push(Obj::S(s)) }
-}
-fn execword(op: &str, vm: &mut Vmem){
-	if let Ok(val) = op.parse::<i64>(){
-		return vm.st.push(Obj::I(val))
-	}
-	let fc = if let Some(func) = vm.ffi.get(op)
-		{ Some(func.clone()) } else { None };
-	if let Some(fc) = fc {
-		fc(vm)
-	}else{
-		let wc = if let Some(wf) = vm.ws.get(op)
-			{ Some(wf.clone()) } else { None };
-		if let Some(wc) = wc {
-			vmexec(vm, &wc)
-		}else{
-			if let Some(uop) = vm.uop {
-				uop(vm, op)
-			}
-		}
-	}
 }
 pub static VMPRELUDE: &'static str = r#"(
 (= fn (' n ...a f) (' = n (\a f))
@@ -280,18 +239,18 @@ fn bracketmatch<T: Iterator<Item=(usize,char)>>(mut chars: T) -> usize {
 	}
 	idx
 }
-fn tokenize(code: &str, opi: usize) -> (usize,usize){
-	let mut chars = code[opi..].chars().enumerate().skip_while(|&(_,ch)| ch.is_whitespace());
-	let fch = chars.next();
-	match fch {
-		None => (0, 0),
-		Some((oi,'[')) => (opi+oi, opi+bracketmatch(chars)),
-		Some((oi,_)) =>
-			(opi+oi, opi+match chars.take_while(|&(_,ch)| !ch.is_whitespace()).last() {
-				None => oi+1,
-				Some((i,_)) => i+1,
-			})
-	}
+pub fn lispify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
+	b.insert("(+", add);
+	b.insert("(-", sub);
+	b.insert("(*", mul);
+	b.insert("(%/", divmod);
+	b.insert("(if", pick);
+	b.insert("(<=>", cmp);
+	b.insert("(print", printobj);
+	b.insert("(nth", nth);
+	b.insert("(car", car);
+	b.insert("(cdr", cdr);
+	//b.insert("(cons", cons);
 }
 // (+ (* 2 3 (+ 4 3)) (- 5 6))
 // ["+", ["*", 2, 3, ["+", 4, 3]], ["-", 5 6]]
@@ -301,9 +260,10 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 	let mut lpos: usize = 0;
 	let mut curls: Vec<Vec<Obj>> = Vec::new();
 	let mut cval: Vec<Obj> = Vec::new();
-	fn lparse(curls: &Vec<Vec<Obj>> , code: &str) -> Obj {
-		if let Some(curl) = curls.last_mut() {
-			curl.push(Obj::S(String::from(code)))
+	fn lparse(curls: &mut Vec<Vec<Obj>>, code: &str) {
+		if let Some(ref mut curl) = curls.last_mut() {
+			curl.push(if let Ok(val) = code.parse::<i64>()
+				{ Obj::I(val) }else{ Obj::S(String::from(code)) });
 		}
 	};
 	for (ci,c) in code.char_indices() {
@@ -336,14 +296,14 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 					lparse(&mut curls, &code[lpos..ci]);
 					lpos = 0
 				},
-				_ => curstr.push(c)
+				_ => ()
 			}
 		}else{
 			if c == '[' { smode +=1 }
 			else if c == ']' {
 				smode -=1;
 				if smode == 0 {
-					curls.last_mut().push(Obj::S(curstr.clone()));
+					curls.last_mut().unwrap().push(Obj::S(curstr.clone()));
 					curstr.clear();
 					continue
 				}
@@ -353,11 +313,25 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 	}
 	cval
 }
-pub fn vmeval(vm: &mut Vmem, code: &Vec<Obj>) {
+pub fn vmeval(vm: &mut Vmem, code: Vec<Obj>) -> Obj {
+	let mut codev = Vec::new();
 	for o in code {
-		printobj(o)
+		if let Obj::A(expr) = o
+			{ codev.push(vmeval(vm, expr)) } else { codev.push(o) }
 	}
+	let mut code = codev.into_iter();
+	if let Some(Obj::S(op)) = code.next() {
+		let mut preop = String::from("(");
+		preop.push_str(&op);
+		let fc = if let Some(func) = vm.ffi.get(&preop[..])
+			{ Some(func.clone()) } else { None };
+		if let Some(fc) = fc {
+			vm.st = code.collect();
+			fc(vm)
+		}
+	}
+	Obj::A(mem::replace(&mut vm.st, Vec::new()))
 }
 pub fn vmexec(vm: &mut Vmem, code: &str){
-	vmeval(vm, &vmcompile(code))
+	vmeval(vm, vmcompile(code));
 }
