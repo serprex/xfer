@@ -27,34 +27,54 @@ fn cdr(vm: &mut Vmem){
 		vm.st.remove(0);
 	}
 }
-fn add(vm: &mut Vmem){
+fn binop(vm: &mut Vmem, f: fn(Obj, Obj) -> Obj) {
 	let ln = vm.st.len();
 	if ln > 0 {
 		let mut a = vm.st.swap_remove(0);
 		let mut i = 1;
 		while i < ln-i {
-			let o = vm.st.swap_remove(i);
-			a = iaddobj(a, o);
+			a = f(a, vm.st.swap_remove(i));
 			i += 1
 		}
 		while ln-i > 0 {
-			let o = vm.st.pop().unwrap();
-			a = iaddobj(a, o);
+			a = f(a, vm.st.pop().unwrap());
 			i += 1
 		}
 		vm.st.push(a)
 	}
 }
+fn add(vm: &mut Vmem){
+	binop(vm, iaddobj)
+}
 fn sub(vm: &mut Vmem){
-	if let (Some(Obj::I(b)),Some(Obj::I(a))) = (vm.st.pop(), vm.st.pop())
-		{ vm.st.push(Obj::I(a - b)) } else { vm.st.push(Obj::E) }
+	fn func(a: Obj, b: Obj) -> Obj {
+		if let (Obj::I(a), Obj::I(b)) = (a,b)
+			{ Obj::I(a-b) } else { Obj::E }
+	}
+	binop(vm, func)
 }
 fn mul(vm: &mut Vmem){
-	if let (Some(Obj::I(b)),Some(Obj::I(a))) = (vm.st.pop(), vm.st.pop()){
-		vm.st.push(Obj::I(a * b))
-	} else { vm.st.push(Obj::E) }
+	fn func(a: Obj, b: Obj) -> Obj {
+		if let (Obj::I(a), Obj::I(b)) = (a,b)
+			{ Obj::I(a*b) } else { Obj::E }
+	}
+	binop(vm, func)
 }
-fn divmod(vm: &mut Vmem){
+fn opdiv(vm: &mut Vmem){
+	fn func(a: Obj, b: Obj) -> Obj {
+		if let (Obj::I(a), Obj::I(b)) = (a,b)
+			{ if b != 0 { Obj::I(a/b) } else { Obj::E } } else { Obj::E }
+	}
+	binop(vm, func)
+}
+fn opmod(vm: &mut Vmem){
+	fn func(a: Obj, b: Obj) -> Obj {
+		if let (Obj::I(a), Obj::I(b)) = (a,b)
+			{ if b != 0 { Obj::I(a%b) } else { Obj::E } } else { Obj::E }
+	}
+	binop(vm, func)
+}
+fn div(vm: &mut Vmem){
 	if let (Some(Obj::I(b)),Some(Obj::I(a))) = (vm.st.pop(), vm.st.pop()){
 		if b != 0{
 			vm.st.push(Obj::I(a/b));
@@ -223,39 +243,26 @@ fn parsestring(s: &str) -> String{
 	}
 	ret
 }
-fn bracketmatch<T: Iterator<Item=(usize,char)>>(mut chars: T) -> usize {
-	let mut idx: usize = 0;
-	let mut pm: u32 = 0;
-	while let Some((oi, ch)) = chars.next() {
-		idx = oi+1;
-		if ch == '\\' { chars.next(); }
-		else {
-			if ch == '[' { pm += 1 }
-			else if ch == ']' {
-				if pm == 0 { break }
-				pm -= 1
-			}
-		}
-	}
-	idx
-}
 pub fn lispify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
 	b.insert("(+", add);
 	b.insert("(-", sub);
 	b.insert("(*", mul);
-	b.insert("(%/", divmod);
+	b.insert("(/", opdiv);
+	b.insert("(%", opmod);
 	b.insert("(if", pick);
 	b.insert("(<=>", cmp);
 	b.insert("(print", printobj);
 	b.insert("(nth", nth);
 	b.insert("(car", car);
 	b.insert("(cdr", cdr);
+	b.insert("(=", setvar);
 	//b.insert("(cons", cons);
 }
 // (+ (* 2 3 (+ 4 3)) (- 5 6))
 // ["+", ["*", 2, 3, ["+", 4, 3]], ["-", 5 6]]
 pub fn vmcompile(code: &str) -> Vec<Obj>{
 	let mut smode = 0;
+	let mut escmode = false;
 	let mut curstr = String::new();
 	let mut lpos: usize = 0;
 	let mut curls: Vec<Vec<Obj>> = Vec::new();
@@ -299,25 +306,28 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 				_ => ()
 			}
 		}else{
-			if c == '[' { smode +=1 }
+			if escmode { escmode = false }
+			else if c == '[' { smode +=1 }
 			else if c == ']' {
 				smode -=1;
 				if smode == 0 {
-					curls.last_mut().unwrap().push(Obj::S(curstr.clone()));
+					curls.last_mut().unwrap().push(Obj::S(parsestring(&curstr[..])));
 					curstr.clear();
 					continue
 				}
-			}
+			}else if c == '\\' { escmode = true }
 			curstr.push(c)
 		}
 	}
 	cval
 }
-pub fn vmeval(vm: &mut Vmem, code: Vec<Obj>) -> Obj {
+pub fn vmeval(vm: &mut Vmem, code: Vec<Obj>) {
 	let mut codev = Vec::new();
 	for o in code {
-		if let Obj::A(expr) = o
-			{ codev.push(vmeval(vm, expr)) } else { codev.push(o) }
+		if let Obj::A(expr) = o {
+			vmeval(vm, expr);
+			codev.extend(mem::replace(&mut vm.st, Vec::new()).into_iter())
+		} else { codev.push(o) }
 	}
 	let mut code = codev.into_iter();
 	if let Some(Obj::S(op)) = code.next() {
@@ -330,8 +340,7 @@ pub fn vmeval(vm: &mut Vmem, code: Vec<Obj>) -> Obj {
 			fc(vm)
 		}
 	}
-	Obj::A(mem::replace(&mut vm.st, Vec::new()))
 }
-pub fn vmexec(vm: &mut Vmem, code: &str){
-	vmeval(vm, vmcompile(code));
+pub fn vmexec(vm: &mut Vmem, code: &str) {
+	vmeval(vm, vmcompile(code))
 }
