@@ -19,14 +19,6 @@ fn cmp(vm: &mut Vmem){
 	if let (Some(bo),Some(ao)) = (vm.st.pop(), vm.st.pop())
 		{ vm.st.push(ordobji(ao.cmp(&bo))) } else { vm.st.push(Obj::E) }
 }
-fn car(vm: &mut Vmem){
-	vm.st.truncate(1)
-}
-fn cdr(vm: &mut Vmem){
-	if vm.st.len() > 0 {
-		vm.st.remove(0);
-	}
-}
 fn binop(vm: &mut Vmem, f: fn(Obj, Obj) -> Obj) {
 	let ln = vm.st.len();
 	if ln > 0 {
@@ -74,28 +66,26 @@ fn opmod(vm: &mut Vmem){
 	}
 	binop(vm, func)
 }
-fn div(vm: &mut Vmem){
-	if let (Some(Obj::I(b)),Some(Obj::I(a))) = (vm.st.pop(), vm.st.pop()){
-		if b != 0{
-			vm.st.push(Obj::I(a/b));
-			vm.st.push(Obj::I(a%b))
-		} else { vm.st.push(Obj::E) }
-	}
-}
 fn band(vm: &mut Vmem){
-	if let (Some(Obj::I(a)),Some(Obj::I(b))) = (vm.st.pop(), vm.st.pop()){
-		vm.st.push(Obj::I(a & b))
+	fn func(a: Obj, b: Obj) -> Obj {
+		if let (Obj::I(a), Obj::I(b)) = (a,b)
+			{ Obj::I(a&b) } else { Obj::E }
 	}
+	binop(vm, func)
 }
 fn bor(vm: &mut Vmem){
-	if let (Some(Obj::I(a)),Some(Obj::I(b))) = (vm.st.pop(), vm.st.pop()){
-		vm.st.push(Obj::I(a | b))
+	fn func(a: Obj, b: Obj) -> Obj {
+		if let (Obj::I(a), Obj::I(b)) = (a,b)
+			{ Obj::I(a|b) } else { Obj::E }
 	}
+	binop(vm, func)
 }
 fn bxor(vm: &mut Vmem){
-	if let (Some(Obj::I(a)),Some(Obj::I(b))) = (vm.st.pop(), vm.st.pop()){
-		vm.st.push(Obj::I(a ^ b))
+	fn func(a: Obj, b: Obj) -> Obj {
+		if let (Obj::I(a), Obj::I(b)) = (a,b)
+			{ Obj::I(a^b) } else { Obj::E }
 	}
+	binop(vm, func)
 }
 fn pick(vm: &mut Vmem){
 	if let Some(Obj::I(top)) = vm.st.pop() {
@@ -106,25 +96,27 @@ fn pick(vm: &mut Vmem){
 		}
 	}
 }
+fn concat(vm: &mut Vmem){
+	let mut nst = mem::replace(&mut vm.st, Vec::new());
+	for a in nst.into_iter() {
+		if let Obj::A(a) = a {
+			vm.st.extend(a.into_iter());
+		}
+	}
+}
 fn printobj(vm: &mut Vmem){
 	while let Some(o) = vm.st.pop() {
 		print!("{}", objstr(&o));
 	}
-}
-fn u32char(u: u32) -> char{
-	char::from_u32(u).unwrap_or('\u{fffd}')
 }
 fn printchr(vm: &mut Vmem){
 	if let Some(Obj::I(ai)) = vm.st.pop() {
 		print!("{}", u32char(ai as u32))
 	}
 }
-fn pushdepth(vm: &mut Vmem){
+fn qlen(vm: &mut Vmem){
 	let len = vm.st.len() as i64;
-	vm.st.push(Obj::I(len));
-}
-fn mka(vm: &mut Vmem){
-	vm.st.push(Obj::A(Vec::new()))
+	vm.st = vec![Obj::I(len)]
 }
 fn nth(vm: &mut Vmem){
 	if let Some(Obj::I(n)) = vm.st.pop(){
@@ -153,6 +145,10 @@ fn len(vm: &mut Vmem){
 			_ => -1
 		}));
 	}
+}
+fn quote(vm: &mut Vmem){
+	let ost = mem::replace(&mut vm.st, Vec::new());
+	vm.st.push(Obj::A(ost))
 }
 fn setvar(vm: &mut Vmem){
 	if let (Some(Obj::S(s)),Some(o)) = (vm.st.pop(),vm.st.pop()) {
@@ -198,51 +194,21 @@ fn getline(vm: &mut Vmem){
 	if let Ok(_) = stdin().read_line(&mut s) { vm.st.push(Obj::S(s)) }
 }
 pub static VMPRELUDE: &'static str = r#"(
-(= fn (' n ...a f) (' = n (\a f))
-(fn iff (' x y) (' (if x y (')))
-(fn neg 'x (' (* x -1)))
-(fn not 'x (' (if x 0 1)))
-(fn boo 'x (' (if x 1 0)))
-(fn eq (' x y) (' (not (<=> x y))))
-(fn neq (' x y) (' (boo (<=> x y))))
-(fn gt (' x y) (' (eq (<=> x y) 1)))
-(fn lt (' x y) (' (eq (<=> x y) -1)))
-(fn gte (' x y) (' (neq (<=> x y) -1)))
-(fn lte (' x y) (' (neq (<=> x y) 1)))
-(fn prln 'x (' (print x) (print 10))))"#;
-fn xdigit(c: u32) -> u32 {
-	if c >= ('0' as u32) && c <= ('9' as u32) { c-('0' as u32) }
-	else if c >= ('a' as u32) && c<= ('z' as u32) { c-('a' as u32)+10 }
-	else { 16 }
-}
-fn parsestring(s: &str) -> String{
-	let mut ret = String::new();
-	let mut esc = false;
-	let mut hex = 0;
-	let mut uni = 0;
-	for c in s.chars() {
-		if !esc && c == '\\'{
-			esc = true
-		} else {
-			if esc {
-				let xd = xdigit(c as u32);
-				uni = if uni == 0 {
-					if c == 'u' { 7 } else if xd<16 { 1 } else { -2 }
-				} else { uni-1 };
-				if uni >= 0 {
-					if xd<16 { hex = (hex<<4)|xd }
-					else { uni = -1 }
-				}
-				if uni <= 0 {
-					if uni > -2 { ret.push(u32char(hex)) }
-					if uni < 0 { ret.push(c) }
-					esc = false
-				}
-			} else { ret.push(c) }
-		}
-	}
-	ret
-}
+(= nil {})
+(= fn {n ..a f} (' = n (\a f))
+(fn void {..a} {})
+(fn inline {..a} {"a})
+(fn iff {x y} (' (if x y (')))
+(fn neg x (' (* x -1)))
+(fn not x (' (if x 0 1)))
+(fn boo x (' (if x 1 0)))
+(fn eq {x y} (' (not (<=> x y))))
+(fn neq {x y} (' (boo (<=> x y))))
+(fn gt {x y} (' (eq (<=> x y) 1)))
+(fn lt {x y} (' (eq (<=> x y) -1)))
+(fn gte {x y} (' (neq (<=> x y) -1)))
+(fn lte {x y} (' (neq (<=> x y) 1)))
+(fn prln x (' (print x) (print 10))))"#;
 pub fn lispify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
 	b.insert("(+", add);
 	b.insert("(-", sub);
@@ -251,15 +217,13 @@ pub fn lispify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
 	b.insert("(%", opmod);
 	b.insert("(if", pick);
 	b.insert("(<=>", cmp);
+	b.insert("(concat", concat);
 	b.insert("(print", printobj);
 	b.insert("(nth", nth);
-	b.insert("(car", car);
-	b.insert("(cdr", cdr);
 	b.insert("(=", setvar);
-	//b.insert("(cons", cons);
+	b.insert("(QUOTE", quote);
+	b.insert("(qlen", qlen);
 }
-// (+ (* 2 3 (+ 4 3)) (- 5 6))
-// ["+", ["*", 2, 3, ["+", 4, 3]], ["-", 5 6]]
 pub fn vmcompile(code: &str) -> Vec<Obj>{
 	let mut smode = 0;
 	let mut escmode = false;
@@ -277,14 +241,15 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 		if lpos == 0 { lpos = ci }
 		if smode == 0 {
 			match c {
-				'(' => {
-					lparse(&mut curls, &code[lpos..ci]);
-					lpos = 0;
-					curls.push(Vec::new())
-				},
-				')' => {
-					lparse(&mut curls, &code[lpos..ci]);
-					lpos = 0;
+				'{'|'}'|'('|')'|'['|' ' => (),
+				_ => continue
+			}
+			lparse(&mut curls, &code[lpos..ci]);
+			lpos = 0;
+			match c {
+				'{' => curls.push(vec![Obj::S(String::from("(QUOTE"))]),
+				'(' => curls.push(Vec::new()),
+				')'|'}' => {
 					if let Some(l) = curls.pop() {
 						if let Some(ll) = curls.last_mut() {
 							ll.push(Obj::A(l))
@@ -294,16 +259,9 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 						}
 					} else { break }
 				},
-				'[' => {
-					lparse(&mut curls, &code[lpos..ci]);
-					lpos = 0;
-					smode = 1
-				},
-				' ' => {
-					lparse(&mut curls, &code[lpos..ci]);
-					lpos = 0
-				},
-				_ => ()
+				'[' => smode = 1,
+				' ' => (),
+				_ => unreachable!()
 			}
 		}else{
 			if escmode { escmode = false }

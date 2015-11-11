@@ -90,9 +90,6 @@ fn printobj(vm: &mut Vmem){
 		{ print!("{}", objstr(&o)) }
 		else { println!("Stack underflow") }
 }
-fn u32char(u: u32) -> char{
-	char::from_u32(u).unwrap_or('\u{fffd}')
-}
 fn printchr(vm: &mut Vmem){
 	if let Some(Obj::I(ai)) = vm.st.pop() {
 		print!("{}", u32char(ai as u32))
@@ -252,39 +249,6 @@ pub static VMPRELUDE: &'static str = r#"[0 $]@dropx \
 ['while swap iff]@ifwhile \
 [=proc dup =arr dup len =ln 0 [dup =i nth "proc . "i 1 + dup "ln gte] 0 "ln gt ifwhile]@map \
 [print 10 prchr]@prln"#;
-fn xdigit(c: u32) -> u32 {
-	if c >= ('0' as u32) && c <= ('9' as u32) { c-('0' as u32) }
-	else if c >= ('a' as u32) && c<= ('z' as u32) { c-('a' as u32)+10 }
-	else { 16 }
-}
-fn parsestring(s: &str) -> String{
-	let mut ret = String::new();
-	let mut esc = false;
-	let mut hex = 0;
-	let mut uni = 0;
-	for c in s.chars() {
-		if !esc && c == '\\'{
-			esc = true
-		} else {
-			if esc {
-				let xd = xdigit(c as u32);
-				uni = if uni == 0 {
-					if c == 'u' { 7 } else if xd<16 { 1 } else { -2 }
-				} else { uni-1 };
-				if uni >= 0 {
-					if xd<16 { hex = (hex<<4)|xd }
-					else { uni = -1 }
-				}
-				if uni <= 0 {
-					if uni > -2 { ret.push(u32char(hex)) }
-					if uni < 0 { ret.push(c) }
-					esc = false
-				}
-			} else { ret.push(c) }
-		}
-	}
-	ret
-}
 pub fn forthify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
 	b.insert("$", sform);
 	b.insert("?", pick);
