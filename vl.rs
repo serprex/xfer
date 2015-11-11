@@ -232,12 +232,12 @@ pub fn lispify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
 }
 pub fn vmcompile(code: &str) -> Vec<Obj>{
 	let mut smode = 0;
-	let mut wmode = true;
 	let mut escmode = false;
 	let mut lpos: usize = 0;
 	let mut curls: Vec<Vec<Obj>> = Vec::new();
 	let mut cval: Vec<Obj> = Vec::new();
 	fn lparse(curls: &mut Vec<Vec<Obj>>, code: &str) {
+		if code.is_empty() { return }
 		if let Some(ref mut curl) = curls.last_mut() {
 			curl.push(if let Ok(val) = code.parse::<i64>()
 				{ Obj::I(val) }else{ Obj::S(String::from(code)) });
@@ -245,9 +245,6 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 	};
 	for (ci,c) in code.char_indices() {
 		if smode == 0 {
-			if wmode {
-				if c.is_whitespace() { lpos = ci+c.len_utf8();continue } else { wmode = false }
-			}
 			match c {
 				'{'|'}'|'('|')'|'[' => (),
 				_ if c.is_whitespace() => (),
@@ -256,7 +253,7 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 			lparse(&mut curls, &code[lpos..ci]);
 			lpos = ci+c.len_utf8();
 			match c {
-				'{' => curls.push(vec![Obj::S(String::from("(QUOTE"))]),
+				'{' => curls.push(vec![Obj::S(String::from("QUOTE"))]),
 				'(' => curls.push(Vec::new()),
 				')'|'}' => {
 					if let Some(l) = curls.pop() {
@@ -269,7 +266,7 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 					} else { break }
 				},
 				'[' => smode = 1,
-				_ if c.is_whitespace() => wmode = true,
+				_ if c.is_whitespace() => (),
 				_ => unreachable!()
 			}
 		}else{
