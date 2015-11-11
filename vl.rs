@@ -19,6 +19,10 @@ fn cmp(vm: &mut Vmem){
 	if let (Some(bo),Some(ao)) = (vm.st.pop(), vm.st.pop())
 		{ vm.st.push(ordobji(ao.cmp(&bo))) } else { vm.st.push(Obj::E) }
 }
+fn mapop(vm: &mut Vmem, f: fn(Obj) -> Obj) {
+	let ost = mem::replace(&mut vm.st, Vec::new());
+	vm.st.extend(ost.into_iter().map(f))
+}
 fn binop(vm: &mut Vmem, f: fn(Obj, Obj) -> Obj) {
 	let ln = vm.st.len();
 	if ln > 0 {
@@ -138,13 +142,14 @@ fn nthset(vm: &mut Vmem){
 	}
 }
 fn len(vm: &mut Vmem){
-	if let Some(o) = vm.st.pop(){
-		vm.st.push(Obj::I(match o {
+	fn f(o: Obj) -> Obj{
+		Obj::I(match o {
 			Obj::S(s) => s.len() as i64,
 			Obj::A(a) => a.len() as i64,
 			_ => -1
-		}));
+		})
 	}
+	mapop(vm, f)
 }
 fn quote(vm: &mut Vmem){
 	let ost = mem::replace(&mut vm.st, Vec::new());
@@ -219,6 +224,7 @@ pub fn lispify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
 	b.insert("(<=>", cmp);
 	b.insert("(concat", concat);
 	b.insert("(print", printobj);
+	b.insert("(len", len);
 	b.insert("(nth", nth);
 	b.insert("(=", setvar);
 	b.insert("(QUOTE", quote);
@@ -226,8 +232,8 @@ pub fn lispify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
 }
 pub fn vmcompile(code: &str) -> Vec<Obj>{
 	let mut smode = 0;
+	let mut wmode = true;
 	let mut escmode = false;
-	let mut curstr = String::new();
 	let mut lpos: usize = 0;
 	let mut curls: Vec<Vec<Obj>> = Vec::new();
 	let mut cval: Vec<Obj> = Vec::new();
@@ -238,14 +244,17 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 		}
 	};
 	for (ci,c) in code.char_indices() {
-		if lpos == 0 { lpos = ci }
 		if smode == 0 {
+			if wmode {
+				if c.is_whitespace() { lpos = ci+c.len_utf8();continue } else { wmode = false }
+			}
 			match c {
-				'{'|'}'|'('|')'|'['|' ' => (),
+				'{'|'}'|'('|')'|'[' => (),
+				_ if c.is_whitespace() => (),
 				_ => continue
 			}
 			lparse(&mut curls, &code[lpos..ci]);
-			lpos = 0;
+			lpos = ci+c.len_utf8();
 			match c {
 				'{' => curls.push(vec![Obj::S(String::from("(QUOTE"))]),
 				'(' => curls.push(Vec::new()),
@@ -260,7 +269,7 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 					} else { break }
 				},
 				'[' => smode = 1,
-				' ' => (),
+				_ if c.is_whitespace() => wmode = true,
 				_ => unreachable!()
 			}
 		}else{
@@ -269,12 +278,10 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 			else if c == ']' {
 				smode -=1;
 				if smode == 0 {
-					curls.last_mut().unwrap().push(Obj::S(parsestring(&curstr[..])));
-					curstr.clear();
+					curls.last_mut().unwrap().push(Obj::S(parsestring(&code[lpos..ci])));
 					continue
 				}
 			}else if c == '\\' { escmode = true }
-			curstr.push(c)
 		}
 	}
 	cval
