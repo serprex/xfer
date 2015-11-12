@@ -23,21 +23,21 @@ fn mapop(vm: &mut Vmem, f: fn(Obj) -> Obj) {
 	let ost = mem::replace(&mut vm.st, Vec::new());
 	vm.st.extend(ost.into_iter().map(f))
 }
-fn binop(vm: &mut Vmem, f: fn(Obj, Obj) -> Obj) {
-	let ln = vm.st.len();
-	if ln > 0 {
-		let mut a = vm.st.swap_remove(0);
-		let mut i = 1;
-		while i < ln-i {
-			a = f(a, vm.st.swap_remove(i));
-			i += 1
-		}
-		while ln-i > 0 {
-			a = f(a, vm.st.pop().unwrap());
-			i += 1
-		}
-		vm.st.push(a)
+fn mappairs(vm: &mut Vmem, f: fn(Obj, Obj) -> Obj) {
+	let mut oi = mem::replace(&mut vm.st, Vec::new()).into_iter();
+	while let Some(a) = oi.next() {
+		let b = oi.next().unwrap_or(Obj::E);
+		vm.st.push(f(a, b))
 	}
+}
+fn binop(vm: &mut Vmem, f: fn(Obj, Obj) -> Obj) {
+	if vm.st.is_empty() { return }
+	let mut oi = mem::replace(&mut vm.st, Vec::new()).into_iter();
+	let mut a = oi.next().unwrap();
+	for o in oi {
+		a = f(a, o)
+	}
+	vm.st.push(a)
 }
 fn add(vm: &mut Vmem){
 	binop(vm, iaddobj)
@@ -123,14 +123,21 @@ fn qlen(vm: &mut Vmem){
 	vm.st = vec![Obj::I(len)]
 }
 fn nth(vm: &mut Vmem){
-	if let Some(Obj::I(n)) = vm.st.pop(){
-		let r: Option<Obj> = match vm.st.last() {
-			Some(&Obj::S(ref s)) => s.chars().nth(n as usize).map(|x| Obj::I(x as i64)),
-			Some(&Obj::A(ref a)) => a.get(n as usize).map(|x| x.clone()),
-			_ => None
-		};
-		vm.st.push(r.unwrap_or(Obj::E))
+	fn f(a: Obj, b: Obj) -> Obj {
+		if let Obj::I(n) = a{
+			let r: Option<Obj> = match b {
+				Obj::S(s) => s.chars().nth(n as usize).map(|x| Obj::I(x as i64)),
+				Obj::A(mut a) => {
+					let ln = a.len();
+					let un = n as usize;
+					Some(if un < ln { a.swap_remove(un) } else { Obj::E })
+				},
+				_ => None
+			};
+			r.unwrap_or(Obj::E)
+		} else { Obj::E }
 	}
+	mappairs(vm, f)
 }
 fn nthset(vm: &mut Vmem){
 	if let Some(Obj::I(idx)) = vm.st.pop() {
@@ -156,31 +163,38 @@ fn quote(vm: &mut Vmem){
 	vm.st.push(Obj::A(ost))
 }
 fn setvar(vm: &mut Vmem){
-	if let (Some(Obj::S(s)),Some(o)) = (vm.st.pop(),vm.st.pop()) {
+	if vm.st.is_empty() { return }
+	let mut ost = mem::replace(&mut vm.st, Vec::new());
+	if let Obj::S(s) = ost.remove(0) {
 		if let Some(mut var) = vm.vars.last_mut() {
-			var.insert(s, o);
+			var.insert(s, Obj::A(ost));
 		}
 	}
 }
 fn getvar(vm: &mut Vmem){
-	if let Some(Obj::S(s)) = vm.st.pop() {
-		for vars in vm.vars.iter().rev() {
-			if let Some(o) = vars.get(&s) {
-				return vm.st.push(o.clone())
+	let mut ost = mem::replace(&mut vm.st, Vec::new()).into_iter();
+	for o in ost {
+		if let Obj::S(s) = o {
+			for vars in vm.vars.iter().rev() {
+				if let Some(v) = vars.get(&s) {
+					if let &Obj::A(ref a) = v { vm.st.extend(a.iter().map(|x| x.clone())) }
+					else { vm.st.push(v.clone()) }
+					continue
+				}
 			}
-		}
+		} else { vm.st.push(o) }
 	}
-	vm.st.push(Obj::E)
 }
 fn gettype(vm: &mut Vmem){
-	let t = Obj::I(match vm.st.pop() {
-		Some(Obj::E) => 0,
-		Some(Obj::I(_)) => 1,
-		Some(Obj::S(_)) => 2,
-		Some(Obj::A(_)) => 3,
-		None => -1
-	});
-	vm.st.push(t)
+	fn f(o: Obj) -> Obj {
+		Obj::I(match o {
+			Obj::E => 0,
+			Obj::I(_) => 1,
+			Obj::S(_) => 2,
+			Obj::A(_) => 3
+		})
+	}
+	mapop(vm, f)
 }
 fn defword(vm: &mut Vmem){
 	if let (Some(Obj::S(_as)), Some(Obj::S(_bs))) = (vm.st.pop(), vm.st.pop()) {
@@ -226,9 +240,12 @@ pub fn lispify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
 	b.insert("(print", printobj);
 	b.insert("(len", len);
 	b.insert("(nth", nth);
+	b.insert("(\\", getvar);
 	b.insert("(=", setvar);
+	//b.insert("(upvar", upvar);
 	b.insert("(QUOTE", quote);
 	b.insert("(qlen", qlen);
+	b.insert("(typeof", gettype);
 }
 pub fn vmcompile(code: &str) -> Vec<Obj>{
 	let mut smode = 0;
@@ -284,6 +301,7 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 	cval
 }
 pub fn vmeval(vm: &mut Vmem, code: Vec<Obj>) {
+	vm.vars.push(HashMap::new());
 	let mut codev = Vec::new();
 	for o in code {
 		if let Obj::A(expr) = o {
@@ -302,6 +320,7 @@ pub fn vmeval(vm: &mut Vmem, code: Vec<Obj>) {
 			fc(vm)
 		}
 	}
+	vm.vars.pop();
 }
 pub fn vmexec(vm: &mut Vmem, code: &str) {
 	vmeval(vm, vmcompile(code))

@@ -1,6 +1,6 @@
 use std::char;
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::hash_map::{HashMap,Entry};
 use std::io::{Read,stdin};
 use std::iter::Iterator;
 use std::vec::*;
@@ -160,6 +160,19 @@ fn setvar(vm: &mut Vmem){
 		}
 	}
 }
+fn upvar(vm: &mut Vmem){
+	if let (Some(Obj::S(s)),Some(o)) = (vm.st.pop(),vm.st.pop()) {
+		for vars in vm.vars.iter_mut().rev() {
+			if let Entry::Occupied(mut e) = vars.entry(s.clone()) {
+				e.insert(o.clone());
+				return
+			}
+		}
+		if let Some(vars) = vm.vars.first_mut() {
+			vars.insert(s, o.clone());
+		}
+	}
+}
 fn getvar(vm: &mut Vmem){
 	if let Some(Obj::S(s)) = vm.st.pop() {
 		for vars in vm.vars.iter().rev() {
@@ -214,10 +227,8 @@ fn execword(op: &str, vm: &mut Vmem){
 			{ Some(wf.clone()) } else { None };
 		if let Some(wc) = wc {
 			vmexec(vm, &wc)
-		}else{
-			if let Some(uop) = vm.uop {
-				uop(vm, op)
-			}
+		}else if let Some(uop) = vm.uop {
+			uop(vm, op)
 		}
 	}
 }
@@ -245,6 +256,7 @@ pub static VMPRELUDE: &'static str = r#"[0 $]@dropx \
 [<=> -1 eq]@lt \
 [<=> -1 neq]@gte \
 [<=> 1 neq]@lte \
+[mka swap siphon]@mkax \
 [dup =proc . ["proc while] iff]@while \
 ['while swap iff]@ifwhile \
 [=proc dup =arr dup len =ln 0 [dup =i nth "proc . "i 1 + dup "ln gte] 0 "ln gt ifwhile]@map \
@@ -271,8 +283,9 @@ pub fn forthify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
 	b.insert("nth", nth);
 	b.insert("nthset", nthset);
 	b.insert("len", len);
-	b.insert("set", setvar);
-	b.insert("get", getvar);
+	b.insert("setvar", setvar);
+	b.insert("getvar", getvar);
+	b.insert("upvar", upvar);
 	b.insert("t?", gettype);
 	b.insert(".", execstr);
 	b.insert("sayword", sayword);
@@ -329,6 +342,10 @@ pub fn vmexec(vm: &mut Vmem, code: &str){
 			_ if op.starts_with("=") => {
 				vm.st.push(Obj::S(String::from(&op[1..])));
 				setvar(vm)
+			},
+			_ if op.starts_with("~") => {
+				vm.st.push(Obj::S(String::from(&op[1..])));
+				upvar(vm)
 			},
 			_ if op.starts_with("@") && op.len()>1 => {
 				vm.st.push(Obj::S(String::from(&op[1..])));
