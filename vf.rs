@@ -1,4 +1,3 @@
-use std::char;
 use std::cmp::Ordering;
 use std::collections::hash_map::{HashMap,Entry};
 use std::io::{Read,stdin};

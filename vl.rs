@@ -1,4 +1,3 @@
-use std::char;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::io::{Read,stdin};
@@ -101,22 +100,28 @@ fn pick(vm: &mut Vmem){
 	}
 }
 fn concat(vm: &mut Vmem){
-	let mut nst = mem::replace(&mut vm.st, Vec::new());
-	for a in nst.into_iter() {
-		if let Obj::A(a) = a {
+	let ost = mem::replace(&mut vm.st, Vec::new()).into_iter();
+	for o in ost {
+		if let Obj::A(a) = o {
 			vm.st.extend(a.into_iter());
 		}
 	}
 }
 fn printobj(vm: &mut Vmem){
-	while let Some(o) = vm.st.pop() {
-		print!("{}", objstr(&o));
+	let ost = mem::replace(&mut vm.st, Vec::new()).into_iter();
+	for o in ost {
+		print!("{}", objstr(&o))
 	}
 }
 fn printchr(vm: &mut Vmem){
-	if let Some(Obj::I(ai)) = vm.st.pop() {
-		print!("{}", u32char(ai as u32))
+	let ost = mem::replace(&mut vm.st, Vec::new()).into_iter();
+	let mut s = String::new();
+	for o in ost {
+		if let Obj::I(i) = o {
+			s.push(u32char(i as u32))
+		}
 	}
+	print!("{}", s)
 }
 fn qlen(vm: &mut Vmem){
 	let len = vm.st.len() as i64;
@@ -162,6 +167,8 @@ fn quote(vm: &mut Vmem){
 	let ost = mem::replace(&mut vm.st, Vec::new());
 	vm.st.push(Obj::A(ost))
 }
+fn inline(_: &mut Vmem){
+}
 fn setvar(vm: &mut Vmem){
 	if vm.st.is_empty() { return }
 	let mut ost = mem::replace(&mut vm.st, Vec::new());
@@ -172,7 +179,7 @@ fn setvar(vm: &mut Vmem){
 	}
 }
 fn getvar(vm: &mut Vmem){
-	let mut ost = mem::replace(&mut vm.st, Vec::new()).into_iter();
+	let ost = mem::replace(&mut vm.st, Vec::new()).into_iter();
 	for o in ost {
 		if let Obj::S(s) = o {
 			for vars in vm.vars.iter().rev() {
@@ -196,54 +203,44 @@ fn gettype(vm: &mut Vmem){
 	}
 	mapop(vm, f)
 }
-fn defword(vm: &mut Vmem){
-	if let (Some(Obj::S(_as)), Some(Obj::S(_bs))) = (vm.st.pop(), vm.st.pop()) {
-		vm.ws.insert(_as, _bs);
-	}
-}
-fn sayword(vm: &mut Vmem){
-	if let Some(Obj::S(w)) = vm.st.pop() {
-		let s = Obj::S(if let Some(wd) = vm.ws.get(&w)
-			{ wd.clone() } else { w });
-		vm.st.push(s)
-	}
-}
 fn getline(vm: &mut Vmem){
 	let mut s = String::new();
 	if let Ok(_) = stdin().read_line(&mut s) { vm.st.push(Obj::S(s)) }
 }
 pub static VMPRELUDE: &'static str = r#"(
-(= nil {})
-(= fn {n ..a f} (' = n (\a f))
-(fn void {..a} {})
-(fn inline {..a} {"a})
-(fn iff {x y} (' (if x y (')))
-(fn neg x (' (* x -1)))
-(fn not x (' (if x 0 1)))
-(fn boo x (' (if x 1 0)))
-(fn eq {x y} (' (not (<=> x y))))
-(fn neq {x y} (' (boo (<=> x y))))
-(fn gt {x y} (' (eq (<=> x y) 1)))
-(fn lt {x y} (' (eq (<=> x y) -1)))
-(fn gte {x y} (' (neq (<=> x y) -1)))
-(fn lte {x y} (' (neq (<=> x y) 1)))
-(fn prln x (' (print x) (print 10))))"#;
+(= nil)
+(= fn {n ..a f {= "n (fn "a "f)}})
+(fn neg x {* "x -1})
+(fn not x {if "x 0 1})
+(fn boo x {if "x 1 0})
+(fn eq x y {not (<=> "x "y)})
+(fn neq x y {boo (<=> "x "y)})
+(fn gt x y {eq (<=> x y) 1})
+(fn lt x y {eq (<=> x y) -1})
+(fn gte x y {neq (<=> x y) -1})
+(fn lte x y {neq (<=> x y) 1})
+(fn prln x {(print x) (prchr 10)})"#;
 pub fn lispify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
 	b.insert("(+", add);
 	b.insert("(-", sub);
 	b.insert("(*", mul);
 	b.insert("(/", opdiv);
 	b.insert("(%", opmod);
+	b.insert("(&", band);
+	b.insert("(|", bor);
+	b.insert("(^", bxor);
 	b.insert("(if", pick);
 	b.insert("(<=>", cmp);
 	b.insert("(concat", concat);
 	b.insert("(print", printobj);
+	b.insert("(prchr", printchr);
 	b.insert("(len", len);
 	b.insert("(nth", nth);
-	b.insert("(\\", getvar);
+	b.insert("(\"", getvar);
 	b.insert("(=", setvar);
 	//b.insert("(upvar", upvar);
 	b.insert("(QUOTE", quote);
+	b.insert("(inline", inline);
 	b.insert("(qlen", qlen);
 	b.insert("(typeof", gettype);
 }
@@ -301,7 +298,6 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 	cval
 }
 pub fn vmeval(vm: &mut Vmem, code: Vec<Obj>) {
-	vm.vars.push(HashMap::new());
 	let mut codev = Vec::new();
 	for o in code {
 		if let Obj::A(expr) = o {
@@ -310,17 +306,34 @@ pub fn vmeval(vm: &mut Vmem, code: Vec<Obj>) {
 		} else { codev.push(o) }
 	}
 	let mut code = codev.into_iter();
-	if let Some(Obj::S(op)) = code.next() {
-		let mut preop = String::from("(");
-		preop.push_str(&op);
-		let fc = if let Some(func) = vm.ffi.get(&preop[..])
-			{ Some(func.clone()) } else { None };
-		if let Some(fc) = fc {
-			vm.st = code.collect();
-			fc(vm)
-		}
+	match code.next() {
+		Some(Obj::S(op)) => {
+			let mut preop = String::from("(");
+			preop.push_str(&op);
+			let fc = if let Some(func) = vm.ffi.get(&preop[..])
+				{ Some(func.clone()) } else { None };
+			if let Some(fc) = fc {
+				vm.st = code.collect();
+				fc(vm)
+			} // TODO autoquote
+		},
+		Some(Obj::A(mut op)) => {
+			if let Some(Obj::A(opf)) = op.pop() {
+				let mut scope = HashMap::new();
+				for o in op.into_iter() {
+					if let Obj::S(s) = o {
+						if let Some(co) = code.next() {
+							scope.insert(s, co);
+						}
+					}
+				}
+				vm.vars.push(scope);
+				vmeval(vm, opf);
+				vm.vars.pop();
+			}
+		},
+		_ => ()
 	}
-	vm.vars.pop();
 }
 pub fn vmexec(vm: &mut Vmem, code: &str) {
 	vmeval(vm, vmcompile(code))
