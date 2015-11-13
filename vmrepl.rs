@@ -14,8 +14,9 @@ fn exit(_: &mut vm::Vmem){
 fn main() {
 	let mut vm: vm::Vmem = Default::default();
 	vf::forthify(&mut vm.ffi);
-	vl::lispify(&mut vm.ffi);
 	vf::vmexec(&mut vm, vf::VMPRELUDE);
+	vl::lispify(&mut vm.ffi);
+	vl::vmexec(&mut vm, vl::VMPRELUDE);
 	for arg in env::args() {
 		vf::vmexec(&mut vm, &arg[..])
 	}

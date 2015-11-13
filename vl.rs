@@ -144,13 +144,11 @@ fn nth(vm: &mut Vmem){
 	}
 	mappairs(vm, f)
 }
-fn nthset(vm: &mut Vmem){
-	if let Some(Obj::I(idx)) = vm.st.pop() {
-		if let Some(o) = vm.st.pop() {
-			if let Some(&mut Obj::A(ref mut a)) = vm.st.last_mut() {
-				a[idx as usize] = o
-			}
-		}
+fn subset(vm: &mut Vmem){
+	let mut oi = mem::replace(&mut vm.st, Vec::new()).into_iter();
+	if let (Some(Obj::I(mut start)), Some(Obj::I(mut end))) = (oi.next(), oi.next()){
+		if start > end { mem::swap(&mut start, &mut end) }
+		vm.st.extend(oi.into_iter().skip(start as usize).take((end-start) as usize))
 	}
 }
 fn len(vm: &mut Vmem){
@@ -205,11 +203,12 @@ fn gettype(vm: &mut Vmem){
 }
 fn getline(vm: &mut Vmem){
 	let mut s = String::new();
-	if let Ok(_) = stdin().read_line(&mut s) { vm.st.push(Obj::S(s)) }
+	if let Ok(_) = stdin().read_line(&mut s) { vm.st = vec![Obj::S(s)] }
 }
 pub static VMPRELUDE: &'static str = r#"(
 (= nil)
 (= fn {n ..a f {= "n (fn "a "f)}})
+(fn eval ..a {"a})
 (fn neg x {* "x -1})
 (fn not x {if "x 0 1})
 (fn boo x {if "x 1 0})
@@ -234,8 +233,10 @@ pub fn lispify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
 	b.insert("(concat", concat);
 	b.insert("(print", printobj);
 	b.insert("(prchr", printchr);
+	b.insert("(getline", getline);
 	b.insert("(len", len);
 	b.insert("(nth", nth);
+	b.insert("(slice", subset);
 	b.insert("(\"", getvar);
 	b.insert("(=", setvar);
 	//b.insert("(upvar", upvar);
@@ -254,7 +255,9 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 		if code.is_empty() { return }
 		if let Some(ref mut curl) = curls.last_mut() {
 			curl.push(if let Ok(val) = code.parse::<i64>()
-				{ Obj::I(val) }else{ Obj::S(String::from(code)) });
+				{ Obj::I(val) }
+				else if code.starts_with("\"") { Obj::A(vec![Obj::S(String::from("\"")),Obj::S(String::from(&code[1..]))]) }
+				else{ Obj::S(String::from(code)) });
 		}
 	};
 	for (ci,c) in code.char_indices() {
@@ -336,5 +339,7 @@ pub fn vmeval(vm: &mut Vmem, code: Vec<Obj>) {
 	}
 }
 pub fn vmexec(vm: &mut Vmem, code: &str) {
-	vmeval(vm, vmcompile(code))
+	vm.vars.push(HashMap::new());
+	vmeval(vm, vmcompile(code));
+	vm.vars.pop();
 }
