@@ -1,18 +1,9 @@
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::io::{Read,stdin};
 use std::iter::Iterator;
 use std::mem;
 use std::vec::*;
 use vm::*;
-
-fn ordobji(ord: Ordering) -> Obj {
-	Obj::I(match ord {
-		Ordering::Less => -1,
-		Ordering::Equal => 0,
-		Ordering::Greater => 1
-	})
-}
 
 fn cmp(vm: &mut Vmem){
 	if let (Some(bo),Some(ao)) = (vm.st.pop(), vm.st.pop())
@@ -91,11 +82,13 @@ fn bxor(vm: &mut Vmem){
 	binop(vm, func)
 }
 fn pick(vm: &mut Vmem){
-	if let Some(Obj::I(top)) = vm.st.pop() {
-		if top == 0 { vm.st.pop(); }
-		else {
-			let len = vm.st.len();
-			if len > 1 { vm.st.swap_remove(len-2); }
+	let mut oi = mem::replace(&mut vm.st, Vec::new()).into_iter();
+	if let Some(pred) = oi.next() {
+		if let Some(truth) = oi.next() {
+			match pred {
+				Obj::I(0) => vm.st.extend(oi),
+				_ => vm.st.push(truth)
+			}
 		}
 	}
 }
@@ -256,7 +249,7 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 		if let Some(ref mut curl) = curls.last_mut() {
 			curl.push(if let Ok(val) = code.parse::<i64>()
 				{ Obj::I(val) }
-				else if code.starts_with("\"") { Obj::A(vec![Obj::S(String::from("\"")),Obj::S(String::from(&code[1..]))]) }
+				else if code.starts_with("\"") && code.len() > 1 { Obj::A(vec![Obj::S(String::from("\"")),Obj::S(String::from(&code[1..]))]) }
 				else{ Obj::S(String::from(code)) });
 		}
 	};

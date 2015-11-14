@@ -1,17 +1,8 @@
-use std::cmp::Ordering;
 use std::collections::hash_map::{HashMap,Entry};
 use std::io::{Read,stdin};
 use std::iter::Iterator;
 use std::vec::*;
 use vm::*;
-
-fn ordobji(ord: Ordering) -> Obj {
-	Obj::I(match ord {
-		Ordering::Less => -1,
-		Ordering::Equal => 0,
-		Ordering::Greater => 1
-	})
-}
 
 fn cmp(vm: &mut Vmem){
 	if let (Some(bo),Some(ao)) = (vm.st.pop(), vm.st.pop())

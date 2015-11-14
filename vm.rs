@@ -1,4 +1,5 @@
 use std::char;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 #[derive(Clone,PartialEq,Eq,PartialOrd,Ord)]
 pub enum Obj{
@@ -78,4 +79,11 @@ pub fn parsestring(s: &str) -> String{
 		}
 	}
 	ret
+}
+pub fn ordobji(ord: Ordering) -> Obj {
+	Obj::I(match ord {
+		Ordering::Less => -1,
+		Ordering::Equal => 0,
+		Ordering::Greater => 1
+	})
 }
