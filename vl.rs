@@ -191,7 +191,7 @@ fn getvar(vm: &mut Vmem){
 		if let Obj::S(s) = o {
 			for vars in vm.vars.iter().rev() {
 				if let Some(v) = vars.get(&s) {
-					if let &Obj::A(ref a) = v { vm.st.extend(a.iter().map(|x| x.clone())) }
+					if let &Obj::A(ref a) = v { vm.st.extend(a.clone()) }
 					else { vm.st.push(v.clone()) }
 					continue
 				}
@@ -219,21 +219,21 @@ pub static VMPRELUDE: &'static str = r#"(inline
 (!prefix $ $ @)
 (!prefix % " $ @)
 (~ nil)
-(~ fn {n ..a f {~ %n {" %..a {" %f}}}})
+(~ fn {n ..a f {~ %n {" %a {" %f}}}})
 (~ lfn {n ..a f {= %n {" %a %f}}})
-($fn nil? ..a {eq {len %a} 0})
+($fn nil? ..a {%eq {len {" %a}} 0})
 ($fn map f x ..a {concat {%f %x} {concat {if {nil? %a} {} {{$map %f %a}}}}})
 ($fn eval ..a {{concat %a}})
 ($fn neg x {- 0 %x})
 ($fn not x {if %x 0 1})
 ($fn boo x {if %x 1 0})
-($fn eq x y {$not {<=> %x %y}})
-($fn neq x y {$boo {<=> %x %y}})
-($fn gt x y {$eq {<=> %x %y} 1})
-($fn lt x y {$eq {<=> %x %y} -1})
-($fn gte x y {$neq {<=> %x %y} -1})
-($fn lte x y {$neq {<=> %x %y} 1})
-($fn prln x {{print %x} {prchr 10}})
+($fn eq x y {%not {<=> %x %y}})
+($fn neq x y {%boo {<=> %x %y}})
+($fn gt x y {%eq {<=> %x %y} 1})
+($fn lt x y {%eq {<=> %x %y} -1})
+($fn gte x y {%neq {<=> %x %y} -1})
+($fn lte x y {%neq {<=> %x %y} 1})
+($fn prln ..a {{print %a} {prchr 10}})
 )"#;
 pub fn lispify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
 	b.insert("(+", add);
@@ -365,12 +365,27 @@ pub fn vmeval(vm: &mut Vmem, code: Vec<Obj>) {
 		Some(Obj::A(mut op)) => {
 			if let Some(Obj::A(opf)) = op.pop() {
 				let mut scope = HashMap::new();
-				for o in op.into_iter() {
+				let mut oi = op.into_iter();
+				let mut isvari = None;
+				while let Some(o) = oi.next() {
 					if let Obj::S(s) = o {
-						if let Some(co) = code.next() {
+						if s.starts_with("..") {
+							isvari = Some(String::from(&s[2..]));
+							break
+						}else if let Some(co) = code.next() {
 							scope.insert(s, co);
-						}
+						}else { break }
 					}
+				}
+				while let Some(o) = oi.next_back() {
+					if let Obj::S(s) = o {
+						if let Some(co) = code.next_back() {
+							scope.insert(s, co);
+						}else { break }
+					}
+				}
+				if let Some(vari) = isvari {
+					scope.insert(vari, Obj::A(code.collect()));
 				}
 				vm.vars.push(scope);
 				vmeval(vm, opf);
