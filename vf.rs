@@ -1,4 +1,4 @@
-use std::collections::hash_map::{HashMap,Entry};
+use std::collections::hash_map::{Entry,HashMap};
 use std::io::{Read,stdin};
 use std::iter::Iterator;
 use std::vec::*;

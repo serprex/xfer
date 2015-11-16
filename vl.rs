@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::hash_map::{Entry,HashMap};
 use std::io::{Read,stdin};
 use std::iter::Iterator;
 use std::mem;
@@ -169,6 +169,22 @@ fn setvar(vm: &mut Vmem){
 		}
 	}
 }
+fn upvar(vm: &mut Vmem){
+	if vm.st.is_empty() { return }
+	let mut ost = mem::replace(&mut vm.st, Vec::new());
+	if let Obj::S(s) = ost.remove(0) {
+		let aost = Obj::A(ost);
+		for vars in vm.vars.iter_mut().rev() {
+			if let Entry::Occupied(mut e) = vars.entry(s.clone()) {
+				e.insert(aost);
+				return
+			}
+		}
+		if let Some(vars) = vm.vars.first_mut() {
+			vars.insert(s, aost);
+		}
+	}
+}
 fn getvar(vm: &mut Vmem){
 	let ost = mem::replace(&mut vm.st, Vec::new()).into_iter();
 	for o in ost {
@@ -198,20 +214,27 @@ fn getline(vm: &mut Vmem){
 	let mut s = String::new();
 	if let Ok(_) = stdin().read_line(&mut s) { vm.st = vec![Obj::S(s)] }
 }
-pub static VMPRELUDE: &'static str = r#"(
-(= nil)
-(= fn {n ..a f {= "n (fn "a "f)}})
-(fn eval ..a {"a})
-(fn neg x {* "x -1})
-(fn not x {if "x 0 1})
-(fn boo x {if "x 1 0})
-(fn eq x y {not (<=> "x "y)})
-(fn neq x y {boo (<=> "x "y)})
-(fn gt x y {eq (<=> x y) 1})
-(fn lt x y {eq (<=> x y) -1})
-(fn gte x y {neq (<=> x y) -1})
-(fn lte x y {neq (<=> x y) 1})
-(fn prln x {(print x) (prchr 10)})"#;
+pub static VMPRELUDE: &'static str = r#"(inline
+(!prefix " " @)
+(!prefix $ $ @)
+(!prefix % " $ @)
+(~ nil)
+(~ fn {n ..a f {~ %n {" %..a {" %f}}}})
+(~ lfn {n ..a f {= %n {" %a %f}}})
+($fn nil? ..a {eq {len %a} 0})
+($fn map f x ..a {concat {%f %x} {concat {if {nil? %a} {} {{$map %f %a}}}}})
+($fn eval ..a {{concat %a}})
+($fn neg x {- 0 %x})
+($fn not x {if %x 0 1})
+($fn boo x {if %x 1 0})
+($fn eq x y {$not {<=> %x %y}})
+($fn neq x y {$boo {<=> %x %y}})
+($fn gt x y {$eq {<=> %x %y} 1})
+($fn lt x y {$eq {<=> %x %y} -1})
+($fn gte x y {$neq {<=> %x %y} -1})
+($fn lte x y {$neq {<=> %x %y} 1})
+($fn prln x {{print %x} {prchr 10}})
+)"#;
 pub fn lispify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
 	b.insert("(+", add);
 	b.insert("(-", sub);
@@ -230,27 +253,42 @@ pub fn lispify(b: &mut HashMap<&'static str, fn(&mut Vmem)>) {
 	b.insert("(len", len);
 	b.insert("(nth", nth);
 	b.insert("(slice", subset);
-	b.insert("(\"", getvar);
+	b.insert("($", getvar);
 	b.insert("(=", setvar);
-	//b.insert("(upvar", upvar);
-	b.insert("(QUOTE", quote);
+	b.insert("(~", upvar);
+	b.insert("(\"", quote);
 	b.insert("(inline", inline);
 	b.insert("(qlen", qlen);
 	b.insert("(typeof", gettype);
 }
-pub fn vmcompile(code: &str) -> Vec<Obj>{
+pub fn vmcompile(code: &str, prefixes: &mut HashMap<char, Vec<Obj>>) -> Vec<Obj>{
 	let mut smode = 0;
 	let mut escmode = false;
 	let mut lpos: usize = 0;
 	let mut curls: Vec<Vec<Obj>> = Vec::new();
 	let mut cval: Vec<Obj> = Vec::new();
-	fn lparse(curls: &mut Vec<Vec<Obj>>, code: &str) {
+	fn lparse(curls: &mut Vec<Vec<Obj>>, prefixes: &HashMap<char, Vec<Obj>>, code: &str) {
 		if code.is_empty() { return }
 		if let Some(ref mut curl) = curls.last_mut() {
-			curl.push(if let Ok(val) = code.parse::<i64>()
-				{ Obj::I(val) }
-				else if code.starts_with("\"") && code.len() > 1 { Obj::A(vec![Obj::S(String::from("\"")),Obj::S(String::from(&code[1..]))]) }
-				else{ Obj::S(String::from(code)) });
+			if let Ok(val) = code.parse::<i64>()
+				{ curl.push(Obj::I(val)) }
+			else {
+				if code.len() > 1 {
+					if let Some(pfcode) = prefixes.get(&code.chars().nth(0).unwrap()) {
+						fn repat(a: &Vec<Obj>, at: &str) -> Obj {
+							Obj::A(a.iter().map(|o| {
+								match o {
+									&Obj::S(ref s) if s == "@" => Obj::S(String::from(at)),
+									&Obj::A(ref a2) => repat(a2, at),
+									_ => o.clone()
+								}
+							}).collect())
+						}
+						return curl.push(repat(pfcode, &code[code.chars().nth(0).unwrap().len_utf8()..]))
+					}
+				}
+				curl.push(Obj::S(String::from(code)))
+			}
 		}
 	};
 	for (ci,c) in code.char_indices() {
@@ -260,13 +298,24 @@ pub fn vmcompile(code: &str) -> Vec<Obj>{
 				_ if c.is_whitespace() => (),
 				_ => continue
 			}
-			lparse(&mut curls, &code[lpos..ci]);
+			lparse(&mut curls, &prefixes, &code[lpos..ci]);
 			lpos = ci+c.len_utf8();
 			match c {
-				'{' => curls.push(vec![Obj::S(String::from("QUOTE"))]),
+				'{' => curls.push(vec![Obj::S(String::from("\""))]),
 				'(' => curls.push(Vec::new()),
 				')'|'}' => {
 					if let Some(l) = curls.pop() {
+						{	let mut li = l.iter();
+							if let Some(&Obj::S(ref fop)) = li.next() {
+								if fop == "!prefix" {
+									if let Some(&Obj::S(ref prefix)) = li.next() {
+										if let Some(ch) = prefix.chars().nth(0) {
+											prefixes.insert(ch, li.map(|x| x.clone()).collect());
+										}
+									}
+								}
+							}
+						}
 						if let Some(ll) = curls.last_mut() {
 							ll.push(Obj::A(l))
 						} else {
@@ -331,8 +380,8 @@ pub fn vmeval(vm: &mut Vmem, code: Vec<Obj>) {
 		_ => ()
 	}
 }
-pub fn vmexec(vm: &mut Vmem, code: &str) {
+pub fn vmexec(vm: &mut Vmem, prefixes: &mut HashMap<char, Vec<Obj>>, code: &str) {
 	vm.vars.push(HashMap::new());
-	vmeval(vm, vmcompile(code));
+	vmeval(vm, vmcompile(code, prefixes));
 	vm.vars.pop();
 }
