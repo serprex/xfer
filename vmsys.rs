@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::sync::Mutex;
 use vm::*;
+use vf;
 
 #[derive(Debug)]
 enum Fnode{
@@ -47,10 +48,10 @@ pub fn initfs() {
 	else if let Ok(ref mut f) = std::fs::File::open("fsinit")
 		{ f.read_to_string(&mut fsrc); }
 	else { std::process::exit(0) }
-	let mut vm = newvm();
-	vmexec(&mut vm, VMPRELUDE);
+	let mut vm = Default::default();
+	vf::vmexec(&mut vm, vf::VMPRELUDE);
 	sysify(&mut vm);
-	vmexec(&mut vm, &fsrc[..])
+	vf::vmexec(&mut vm, &fsrc[..])
 }
 
 fn pathfix(path: &String) -> String{
@@ -187,12 +188,21 @@ fn rm(vm: &mut Vmem){
 		}
 	}
 }
+fn login(vm: &mut Vmem){
+	if let (Some(Obj::S(uname)), Some(Obj::S(upsw))) = (vm.st.pop(), vm.st.pop()) {
+		let mut ses = GSES.lock().unwrap();
+		let n = if let Some(ref u) = ses.users.get(&uname) {
+			u.psw == upsw
+		} else { false };
+		if n { ses.user = uname }
+	}
+}
 
 fn handleuop(vm: &mut Vmem, op: &str){
 	let mut bpath = String::from("bin/");
 	bpath.push_str(op);
 	vm.st.push(Obj::S(bpath));
-	vmexec(vm, "fread .")
+	vf::vmexec(vm, "fread .")
 }
 
 pub fn sysify(vm: &mut Vmem){
@@ -204,4 +214,5 @@ pub fn sysify(vm: &mut Vmem){
 	vm.ffi.insert("fread", fread);
 	vm.ffi.insert("fwrite", fwrite);
 	vm.ffi.insert("rm", rm);
+	vm.ffi.insert("login", login);
 }

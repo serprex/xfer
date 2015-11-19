@@ -2,20 +2,22 @@
 extern crate lazy_static;
 use std::io::{BufRead,stdin};
 mod vm;
+mod vf;
+mod vl;
 mod vmsys;
 mod vmdebug;
 
 fn main() {
 	vmsys::initfs();
-	let mut vm = vm::newvm();
-	vm::vmexec(&mut vm, vm::VMPRELUDE);
+	let mut vm = Default::default();
+	vf::vmexec(&mut vm, vf::VMPRELUDE);
 	vmsys::sysify(&mut vm);
 	vm.ffi.insert("prstack", vmdebug::prstack);
 	vmdebug::prprompt(&mut vm);
 	let stdinref = stdin();
 	let mut line = String::new();
 	while let Ok(_) = stdinref.read_line(&mut line) {
-		vm::vmexec(&mut vm, &line[..]);
+		vf::vmexec(&mut vm, &line[..]);
 		vmdebug::prprompt(&mut vm);
 		line.clear()
 	}
