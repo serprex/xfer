@@ -266,7 +266,6 @@ pub static VMPRELUDE: &'static str = r#"(inline
 (#prefix ' (' @))
 (#prefix $ ($ @))
 (#prefix ! ! $@)
-(~ nil)
 (~ fn (tail <n ..a f (~ $n {$a (tail $f)})>))
 (~ lfn (tail <n ..a f (= %n {$a (tail $f)}))>)
 (!fn neg x <- 0 $x>)
@@ -415,7 +414,7 @@ pub fn vmeval(vm: &mut Vmem, code: Vec<Obj>) {
 			{ Some(func.clone()) } else { None };
 		if let Some(fc) = fc {
 			vm.st = code.collect();
-			fc(vm);
+			fc(vm)
 		}
 	}
 }
