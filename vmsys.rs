@@ -188,6 +188,18 @@ fn rm(vm: &mut Vmem){
 		}
 	}
 }
+fn mkuser(vm: &mut Vmem){
+	if let (Some(Obj::S(uname)), Some(Obj::S(upsw)), Some(Obj::S(ugid))) = (vm.st.pop(), vm.st.pop(), vm.st.pop()) {
+		let mut ses = GSES.lock().unwrap();
+		ses.users.entry(uname.clone()).or_insert(User{psw: upsw, gid: ugid});
+	}
+}
+fn deluser(vm: &mut Vmem){
+	if let Some(Obj::S(uname)) = vm.st.pop() {
+		let mut ses = GSES.lock().unwrap();
+		ses.users.remove(&uname);
+	}
+}
 fn login(vm: &mut Vmem){
 	if let (Some(Obj::S(uname)), Some(Obj::S(upsw))) = (vm.st.pop(), vm.st.pop()) {
 		let mut ses = GSES.lock().unwrap();
@@ -209,10 +221,12 @@ pub fn sysify(vm: &mut Vmem){
 	vm.uop = Some(handleuop);
 	vm.ffi.insert("cd", chdir);
 	vm.ffi.insert("wd", wdir);
-	vm.ffi.insert("md", mkdir);
 	vm.ffi.insert("ls", ldir);
+	vm.ffi.insert("mkdir", mkdir);
 	vm.ffi.insert("fread", fread);
 	vm.ffi.insert("fwrite", fwrite);
 	vm.ffi.insert("rm", rm);
+	vm.ffi.insert("mkuser", mkuser);
+	vm.ffi.insert("deluser", deluser);
 	vm.ffi.insert("login", login);
 }
