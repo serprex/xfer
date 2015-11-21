@@ -6,6 +6,7 @@ mod vf;
 mod vl;
 mod vmsys;
 mod vmdebug;
+mod fsinit;
 
 fn main() {
 	vmsys::initfs();

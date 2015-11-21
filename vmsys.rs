@@ -4,6 +4,7 @@ use std::io::Read;
 use std::sync::Mutex;
 use vm::*;
 use vf;
+use fsinit;
 
 #[derive(Debug)]
 enum Fnode{
@@ -42,16 +43,14 @@ lazy_static! {
 }
 
 pub fn initfs() {
-	let mut fsrc = String::new();
-	if let Ok(ref mut f) = std::fs::File::open("fs")
-		{ f.read_to_string(&mut fsrc); }
-	else if let Ok(ref mut f) = std::fs::File::open("fsinit")
-		{ f.read_to_string(&mut fsrc); }
-	else { std::process::exit(0) }
 	let mut vm = Default::default();
 	vf::vmexec(&mut vm, vf::VMPRELUDE);
 	sysify(&mut vm);
-	vf::vmexec(&mut vm, &fsrc[..])
+	if let Ok(ref mut f) = std::fs::File::open("fs") {
+		let mut fsrc = String::new();
+		f.read_to_string(&mut fsrc);
+		vf::vmexec(&mut vm, &fsrc[..])
+	} else { vf::vmexec(&mut vm, fsinit::CODE) }
 }
 
 fn pathfix(path: &String) -> String{

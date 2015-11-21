@@ -1,4 +1,4 @@
-'home/kneil mkdir
+pub static CODE: &'static str = r###"'home/kneil mkdir
 'root mkdir
 [fread prln]'bin/cat fwrite
 [ls 'prln map]'bin/ls fwrite
@@ -135,4 +135,4 @@ This is a system generated response. Please moderate your language. Your message
 'atage prln
 [password: ]println
 'guest ' 'atage mkuser
-' 'atage login
+' 'atage login"###;
