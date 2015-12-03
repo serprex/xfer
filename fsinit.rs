@@ -10,6 +10,12 @@ i'll handle the rest once you're out
 
 regards,
 	atage]'mnt/jack/readme fwrite
+[Welcome to /forth. We try to keep things a little more civil around here than /lisp. Please keep language debates to that directory
+Forth is a dynamically typed stack machine. Instructions are parameterless, & thus the language exists as a series of whitespace separated tokens
+A string in Forth is enclosed in square brackets: [like so]. This allows nesting, [as in [this case]]. Specific bytes may be specified through \\ escapes: [\\0a] for a newline. Additionally unicode may be specified with \\uXXXX
+The ease of nesting is important in Forth. Forth has no internal representation; a forth string is equivalent to raw machine code. Some may accuse me of ideological design, but 
+~hefo
+]'shared/forth/manual
 [Could someone head downstairs & educate those hardhats on what they're making?
 st should be liberated from its misnomer upbringing. Rather than viewing it as a data stack it should be viewed as a code buffer. ie code _is_ data (NOT strings!)
 The syscall interface should be passing slices of the code buffer, not the whole kitchen sink. Right now if one wants to securely withhold data from children callbacks,
@@ -37,7 +43,7 @@ In reality your cheap attempt at a real lisp is being optimized by the chip manu
 
 You're only able to say that because the commonalities are implemented on your chip turf due to political history
 ~psst
-]'home/shared/forth/plslisp fwrite
+]'shared/forth/plslisp fwrite
 [There was some discussion in having a lisp implementation compile to Forth, but those discussions were by those who didn't understand that Lisp isn't backwards forth
 (+ 1 2 3) is _not_ 1 2 + 3 +
 The internal architecture of Lisp's implementation only relies on Forth insofar as one requires a machine to execute it
@@ -110,13 +116,13 @@ eval1: (eval1 {+ 1 2}) -> 3
 eval: (eval + 1 2) -> 3
 And of course: neg, prln, not, boo, eq, neq, gt, lt, gte, lte
 ~psst
-]'home/shared/lisp/semantics fwrite
+]'shared/lisp/semantics fwrite
 [How does anyone keep which brackets they should be using straight in Lisp? It seems like half the time the program executes what I don't want it to, & the other half of the time it refuses to execute that which I do want it to
 ~aawal
 
 It isn't so bad. It can be a little hard keeping track of which calls evaluate to lists & which evaluate to expansions. But similar needs for documentation exist with Forth's necessity that the caller know the stack consumption behavior of the caller
 ~iowart
-]'home/shared/lisp/semanticslol fwrite
+]'shared/lisp/semanticslol fwrite
 [Someone put a leash on those Lispers, their programs are getting exceedingly obnoxious. You're not evolving the field of AI by writing a dictionary attack. ******* script kiddies
 ~aawal
 
@@ -130,7 +136,7 @@ This is a system generated response. Please moderate your language. Your message
 ~aawal
 
 This is a system generated response. Please moderate your language. Your message has been rectified.
-~lord]'home/shared/apocalypse
+~lord]'shared/apocalypse
 [login: ]print
 'atage prln
 [password: ]println
