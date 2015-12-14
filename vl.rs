@@ -324,9 +324,9 @@ pub fn vmcompile(code: &str, prefixes: &mut HashMap<char, Vec<Obj>>) -> Vec<Obj>
 			if let Ok(val) = code.parse::<i64>()
 				{ curl.push(Obj::I(val)) }
 			else {
-				if code.len() > 1 {
+				if code.chars().nth(1).is_some() {
 					if let Some(pfcode) = prefixes.get(&code.chars().nth(0).unwrap()) {
-						fn repat(a: &Vec<Obj>, at: &str) -> Vec<Obj> {
+						fn repat(a: &[Obj], at: &str) -> Vec<Obj> {
 							a.iter().map(|o| {
 								match o {
 									&Obj::S(ref s) if s == "@" => Obj::S(String::from(at)),
