@@ -318,7 +318,7 @@ pub fn vmcompile(code: &str, prefixes: &mut HashMap<char, Vec<Obj>>) -> Vec<Obj>
 	let mut lpos: usize = 0;
 	let mut curls: Vec<Vec<Obj>> = Vec::new();
 	let mut cval: Vec<Obj> = Vec::new();
-	fn lparse(curls: &mut Vec<Vec<Obj>>, prefixes: &HashMap<char, Vec<Obj>>, code: &str) {
+	fn lparse(curls: &mut [Vec<Obj>], prefixes: &HashMap<char, Vec<Obj>>, code: &str) {
 		if code.is_empty() { return }
 		if let Some(ref mut curl) = curls.last_mut() {
 			if let Ok(val) = code.parse::<i64>()
